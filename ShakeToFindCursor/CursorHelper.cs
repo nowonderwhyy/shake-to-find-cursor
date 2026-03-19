@@ -31,7 +31,12 @@ public static class CursorHelper
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
 
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
+
     private const uint SPI_SETCURSORS = 0x0057;
+    private const int SM_CXCURSOR = 13;
+    private const int SM_CYCURSOR = 14;
 
     private const uint IMAGE_CURSOR = 2;
     private const uint LR_LOADFROMFILE = 0x00000010;
@@ -118,8 +123,11 @@ public static class CursorHelper
             IntPtr frameCursor = IntPtr.Zero;
             if (!string.IsNullOrEmpty(path))
             {
-                int ts = (int)(32 * scale);
-                ts = Math.Max(1, ts); // Ensure non-zero size
+                // Dynamically fetch the system's actual base cursor size
+                int baseSize = GetSystemMetrics(SM_CXCURSOR);
+                if (baseSize == 0) baseSize = 32; // Fallback just in case
+
+                int ts = Math.Max(1, (int)(baseSize * scale));
                 frameCursor = LoadImage(IntPtr.Zero, path, IMAGE_CURSOR, ts, ts, LR_LOADFROMFILE);
             }
 
@@ -255,8 +263,6 @@ public static class CursorHelper
             if (_scaleFrames.Count == 0)
                 return;
 
-            List<IntPtr> appliedHandles = new();
-
             try
             {
                 foreach (uint id in SYSTEM_CURSORS)
@@ -283,7 +289,7 @@ public static class CursorHelper
                         // If it fails, we own the handle and must clean it up.
                         if (SetSystemCursor(copy, id))
                         {
-                            appliedHandles.Add(copy); // Track for diagnostics if needed
+                            // Success: Windows takes ownership of 'copy' and will destroy it automatically.
                         }
                         else
                         {

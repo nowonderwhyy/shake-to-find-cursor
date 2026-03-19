@@ -37,8 +37,8 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="60" />
             </Grid.ColumnDefinitions>
-            <Slider x:Name="SliderMagnification" Minimum="2" Maximum="12" TickFrequency="0.5" ValueChanged="SliderMagnification_ValueChanged"/>
-            <TextBlock x:Name="TxtMagnificationValue" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Text="6.0x" />
+            <Slider x:Name="SliderMagnification" Minimum="2" Maximum="12" TickFrequency="0.5"/>
+            <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Text="{Binding ElementName=SliderMagnification, Path=Value, StringFormat={}{0:0.0}x}" />
         </Grid>
 
         <TextBlock Text="Stay enlarged for:" Grid.Row="3"/>
@@ -47,8 +47,8 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="60" />
             </Grid.ColumnDefinitions>
-            <Slider x:Name="SliderHold" Minimum="80" Maximum="600" TickFrequency="20" ValueChanged="SliderHold_ValueChanged"/>
-            <TextBlock x:Name="TxtHoldValue" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Text="240 ms" />
+            <Slider x:Name="SliderHold" Minimum="80" Maximum="600" TickFrequency="20"/>
+            <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Text="{Binding ElementName=SliderHold, Path=Value, StringFormat={}{0} ms}" />
         </Grid>
 
         <CheckBox x:Name="CheckStartup" Grid.Row="5" Content="Start automatically with Windows" Margin="0,15,0,20" FontSize="14" Foreground="#EDEDED"/>

@@ -25,11 +25,11 @@ public partial class App : System.Windows.Application
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
-            File.WriteAllText(Path.Combine(crashDir, "crash.log"), $"{DateTime.Now}\n{args.ExceptionObject}");
+            File.AppendAllText(Path.Combine(crashDir, "crash.log"), $"{DateTime.Now}\n{args.ExceptionObject}\n\n");
         };
         TaskScheduler.UnobservedTaskException += (s, args) =>
         {
-            File.WriteAllText(Path.Combine(crashDir, "crash_task.log"), $"{DateTime.Now}\n{args.Exception}");
+            File.AppendAllText(Path.Combine(crashDir, "crash_task.log"), $"{DateTime.Now}\n{args.Exception}\n\n");
             args.SetObserved();
         };
 

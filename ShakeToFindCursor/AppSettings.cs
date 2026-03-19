@@ -35,7 +35,7 @@ public class AppSettings
         return new AppSettings();
     }
 
-    public void Save()
+    public bool Save()
     {
         var dir = Path.GetDirectoryName(SettingsPath);
         if (dir != null && !Directory.Exists(dir))
@@ -45,12 +45,12 @@ public class AppSettings
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(SettingsPath, json);
 
-        ApplyStartupSettings();
+        return ApplyStartupSettings();
     }
 
-    private void ApplyStartupSettings()
+    private bool ApplyStartupSettings()
     {
-        try 
+        try
         {
             using RegistryKey? key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
             if (key != null)
@@ -67,8 +67,13 @@ public class AppSettings
                 {
                     key.DeleteValue("ShakeToFindCursor", false);
                 }
+                return true;
             }
+            return false;
         }
-        catch { }
+        catch
+        {
+            return false; // Failed due to permissions/AV
+        }
     }
 }

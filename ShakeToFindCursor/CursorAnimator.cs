@@ -217,10 +217,24 @@ public sealed class CursorAnimator : IDisposable
                         break;
                     }
 
-                    // Precise frame pacing: spin-yield to ~7ms (approx 143 FPS)
+                    // Precise frame pacing: ~7ms (approx 143 FPS) with CPU-friendly hybrid wait
                     long targetTicks = Stopwatch.GetTimestamp() + (long)(0.007 * Stopwatch.Frequency);
                     while (Stopwatch.GetTimestamp() < targetTicks)
-                        Thread.Yield();
+                    {
+                        long ticksLeft = targetTicks - Stopwatch.GetTimestamp();
+                        double msLeft = (double)ticksLeft / Stopwatch.Frequency * 1000.0;
+
+                        if (msLeft > 2.0)
+                        {
+                            // Yield to OS to save CPU/Battery
+                            Thread.Sleep(1);
+                        }
+                        else
+                        {
+                            // Lighter busy-wait for sub-millisecond precision
+                            Thread.SpinWait(10);
+                        }
+                    }
                 }
             }
             finally

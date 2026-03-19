@@ -19,21 +19,6 @@ public partial class SettingsWindow : Window
         SliderThreshold.Value = settings.DistanceThreshold;
         SliderTime.Value = settings.TimeWindowMs;
         CheckStartup.IsChecked = settings.RunOnStartup;
-
-        TxtMagnificationValue.Text = $"{settings.MagnificationFactor:0.0}x";
-        TxtHoldValue.Text = $"{settings.HoldDurationMs} ms";
-    }
-
-    private void SliderMagnification_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (TxtMagnificationValue != null)
-            TxtMagnificationValue.Text = $"{SliderMagnification.Value:0.0}x";
-    }
-
-    private void SliderHold_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (TxtHoldValue != null)
-            TxtHoldValue.Text = $"{(int)SliderHold.Value} ms";
     }
 
     private async void BtnApply_Click(object sender, RoutedEventArgs e)
@@ -49,7 +34,18 @@ public partial class SettingsWindow : Window
             settings.TimeWindowMs = (int)SliderTime.Value;
             settings.RunOnStartup = CheckStartup.IsChecked == true;
 
-            settings.Save();
+            bool startupSetSuccessfully = settings.Save();
+
+            if (settings.RunOnStartup && !startupSetSuccessfully)
+            {
+                System.Windows.MessageBox.Show("Failed to enable 'Start automatically with Windows'. This is usually caused by restricted permissions or Antivirus software blocking registry edits.",
+                                "Permission Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                CheckStartup.IsChecked = false;
+                settings.RunOnStartup = false;
+                settings.Save(); // Save again with it disabled
+            }
 
             await System.Threading.Tasks.Task.Run(() =>
             {
