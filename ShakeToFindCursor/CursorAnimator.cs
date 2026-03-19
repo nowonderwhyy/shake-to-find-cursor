@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ShakeToFindCursor;
@@ -83,123 +84,169 @@ public sealed class CursorAnimator : IDisposable
 
     private async Task RunAsync()
     {
-        long lastTicks = Stopwatch.GetTimestamp();
-
-        try
+        // Offload the entire animation loop to a thread pool thread.
+        // This is necessary because the spin-yield pacing loop below would otherwise run
+        // synchronously on the caller's thread (the mouse hook), causing input freezing and crashes.
+        await Task.Run(async () =>
         {
-            while (true)
+            long lastTicks = Stopwatch.GetTimestamp();
+            const double StuckAnimationTimeoutMs = 5000; // Force exit if no new input for 5 seconds
+
+            try
             {
-                long nowTicks = Stopwatch.GetTimestamp();
-                double dt = (nowTicks - lastTicks) / (double)Stopwatch.Frequency;
-                lastTicks = nowTicks;
+                while (true)
+                {
+                    long nowTicks = Stopwatch.GetTimestamp();
+                    double dt = (nowTicks - lastTicks) / (double)Stopwatch.Frequency;
+                    lastTicks = nowTicks;
 
-                if (dt <= 0) dt = 1.0 / 120.0;
-                if (dt > 0.05) dt = 0.05;
+                    if (dt <= 0) dt = 1.0 / 120.0;
+                    if (dt > 0.05) dt = 0.05;
 
-                bool done;
-                double scaleToApply;
+                    bool done;
+                    double scaleToApply;
+                    double msSinceLastInput = 0;
 
+                    lock (_gate)
+                    {
+                        msSinceLastInput =
+                            (Stopwatch.GetTimestamp() - _lastExciteTicks) * 1000.0 / Stopwatch.Frequency;
+
+                        // --- Begin release blend when hold expires ---
+                        if (!_releasing && msSinceLastInput > _holdMs)
+                        {
+                            _releasing = true;
+                            _releaseFromScale = Math.Max(_currentScale, 1.0);
+                            _releaseStartTicks = Stopwatch.GetTimestamp();
+                        }
+
+                        // --- Glide the target toward 1.0 on a deceleration curve ---
+                        if (_releasing)
+                        {
+                            double releaseMs =
+                                (Stopwatch.GetTimestamp() - _releaseStartTicks) * 1000.0 / Stopwatch.Frequency;
+
+                            double p = Math.Clamp(releaseMs / ReleaseBlendMs, 0.0, 1.0);
+
+                            // Power curve: front-loaded decel, long soft tail
+                            double eased = 1.0 - Math.Pow(1.0 - p, ReleaseCurvePower);
+
+                            _targetScale = Lerp(_releaseFromScale, 1.0, eased);
+                        }
+
+                        // --- Pick the right spring zone ---
+                        bool expanding = _targetScale > _currentScale;
+
+                        double stiffness;
+                        double damping;
+
+                        if (expanding)
+                        {
+                            stiffness = ExpandStiffness;
+                            damping = ExpandDamping;
+                        }
+                        else if (_currentScale > 1.25)
+                        {
+                            // Main shrink: moderate spring
+                            stiffness = ShrinkStiffness;
+                            damping = ShrinkDamping;
+                        }
+                        else
+                        {
+                            // Final approach: critically damped glide to rest
+                            stiffness = FinalStiffness;
+                            damping = FinalDamping;
+                        }
+
+                        double accel = stiffness * (_targetScale - _currentScale) - damping * _velocity;
+                        _velocity += accel * dt;
+                        _currentScale += _velocity * dt;
+
+                        if (_currentScale < 1.0) _currentScale = 1.0;
+                        if (_currentScale > _maxScale * 1.05) _currentScale = _maxScale * 1.05;
+
+                        scaleToApply = _currentScale;
+
+                        done =
+                            Math.Abs(_targetScale - _currentScale) < 0.005 &&
+                            Math.Abs(_velocity) < 0.005 &&
+                            _targetScale <= 1.001;
+
+                        // Safety timeout: if animation is still running but no new input for way too long,
+                        // force exit to prevent stuck loops. But only after release has started.
+                        if (_releasing && msSinceLastInput > StuckAnimationTimeoutMs)
+                            done = true;
+                    }
+
+                    int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
+                    if (frameIndex != _lastAppliedFrame)
+                    {
+                        _lastAppliedFrame = frameIndex;
+                        try
+                        {
+                            CursorHelper.ApplyScaleFrame(frameIndex);
+                        }
+                        catch
+                        {
+                            // Cursor operation failed — just continue, we'll restore on cleanup
+                        }
+                    }
+
+                    if (done)
+                    {
+                        // Always restore to frame 0 before final restore
+                        try
+                        {
+                            CursorHelper.ApplyScaleFrame(0);
+                        }
+                        catch
+                        {
+                            // If even this fails, we'll restore below
+                        }
+
+                        await Task.Delay(10);
+
+                        try
+                        {
+                            CursorHelper.RestoreThemeCursors();
+                        }
+                        catch
+                        {
+                            // Final restore attempt failed, but at least we tried
+                        }
+                        break;
+                    }
+
+                    // Precise frame pacing: spin-yield to ~7ms (approx 143 FPS)
+                    long targetTicks = Stopwatch.GetTimestamp() + (long)(0.007 * Stopwatch.Frequency);
+                    while (Stopwatch.GetTimestamp() < targetTicks)
+                        Thread.Yield();
+                }
+            }
+            finally
+            {
                 lock (_gate)
                 {
-                    double msSinceExcite =
-                        (Stopwatch.GetTimestamp() - _lastExciteTicks) * 1000.0 / Stopwatch.Frequency;
-
-                    // --- Begin release blend when hold expires ---
-                    if (!_releasing && msSinceExcite > _holdMs)
-                    {
-                        _releasing = true;
-                        _releaseFromScale = Math.Max(_currentScale, 1.0);
-                        _releaseStartTicks = Stopwatch.GetTimestamp();
-                    }
-
-                    // --- Glide the target toward 1.0 on a deceleration curve ---
-                    if (_releasing)
-                    {
-                        double releaseMs =
-                            (Stopwatch.GetTimestamp() - _releaseStartTicks) * 1000.0 / Stopwatch.Frequency;
-
-                        double p = Math.Clamp(releaseMs / ReleaseBlendMs, 0.0, 1.0);
-
-                        // Power curve: front-loaded decel, long soft tail
-                        double eased = 1.0 - Math.Pow(1.0 - p, ReleaseCurvePower);
-
-                        _targetScale = Lerp(_releaseFromScale, 1.0, eased);
-                    }
-
-                    // --- Pick the right spring zone ---
-                    bool expanding = _targetScale > _currentScale;
-
-                    double stiffness;
-                    double damping;
-
-                    if (expanding)
-                    {
-                        stiffness = ExpandStiffness;
-                        damping = ExpandDamping;
-                    }
-                    else if (_currentScale > 1.25)
-                    {
-                        // Main shrink: moderate spring
-                        stiffness = ShrinkStiffness;
-                        damping = ShrinkDamping;
-                    }
-                    else
-                    {
-                        // Final approach: critically damped glide to rest
-                        stiffness = FinalStiffness;
-                        damping = FinalDamping;
-                    }
-
-                    double accel = stiffness * (_targetScale - _currentScale) - damping * _velocity;
-                    _velocity += accel * dt;
-                    _currentScale += _velocity * dt;
-
-                    if (_currentScale < 1.0) _currentScale = 1.0;
-                    if (_currentScale > _maxScale * 1.05) _currentScale = _maxScale * 1.05;
-
-                    scaleToApply = _currentScale;
-
-                    done =
-                        Math.Abs(_targetScale - _currentScale) < 0.01 &&
-                        Math.Abs(_velocity) < 0.01 &&
-                        _targetScale <= 1.001;
+                    _running = false;
+                    _releasing = false;
+                    _velocity = 0.0;
+                    _targetScale = 1.0;
+                    _currentScale = 1.0;
+                    _lastAppliedFrame = -1;
                 }
-
-                int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
-                if (frameIndex != _lastAppliedFrame)
-                {
-                    _lastAppliedFrame = frameIndex;
-                    CursorHelper.ApplyScaleFrame(frameIndex);
-                }
-
-                if (done)
-                {
-                    // Sit on frame 0 for one beat before OS restore
-                    CursorHelper.ApplyScaleFrame(0);
-                    await Task.Delay(10);
-                    CursorHelper.RestoreThemeCursors();
-                    break;
-                }
-
-                await Task.Delay(8);
             }
-        }
-        finally
-        {
-            lock (_gate)
-            {
-                _running = false;
-                _releasing = false;
-                _velocity = 0.0;
-                _targetScale = 1.0;
-                _currentScale = 1.0;
-                _lastAppliedFrame = -1;
-            }
-        }
+        });
     }
 
     public void Dispose()
     {
-        CursorHelper.RestoreThemeCursors();
+        try
+        {
+            CursorHelper.RestoreThemeCursors();
+        }
+        catch
+        {
+            // Best effort — if restore fails, there's not much we can do
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Threading.Tasks;
 using WinForms = System.Windows.Forms;
@@ -17,6 +18,21 @@ public partial class App : System.Windows.Application
 
     private void Application_Startup(object sender, StartupEventArgs e)
     {
+        // Capture the REAL exception before .NET's dialog tries to load corrupted system icons
+        string crashDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShakeToFindCursor");
+        Directory.CreateDirectory(crashDir);
+
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            File.WriteAllText(Path.Combine(crashDir, "crash.log"), $"{DateTime.Now}\n{args.ExceptionObject}");
+        };
+        TaskScheduler.UnobservedTaskException += (s, args) =>
+        {
+            File.WriteAllText(Path.Combine(crashDir, "crash_task.log"), $"{DateTime.Now}\n{args.Exception}");
+            args.SetObserved();
+        };
+
         CurrentSettings = AppSettings.Load();
         
         Task.Run(() => {

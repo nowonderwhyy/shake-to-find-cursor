@@ -51,7 +51,8 @@ public static class CursorHelper
 
     private static Dictionary<uint, IntPtr[]> _scaleFrames = new();
     private static double _cachedMaxScale = 6.0;
-    public const int ScaleSteps = 48;
+    public const int ScaleSteps = 64;
+    private static double[] _frameScales = Array.Empty<double>();
     public static bool IsCached { get; private set; } = false;
     private static double _lastFactor = -1;
 
@@ -67,6 +68,16 @@ public static class CursorHelper
                 if (ptr != IntPtr.Zero) DestroyIcon(ptr);
 
         _scaleFrames.Clear();
+
+        // Build non-linear scale table: power bias packs more frames near 1.0
+        double peakScale = _cachedMaxScale * 1.05;
+        _frameScales = new double[ScaleSteps];
+        for (int i = 0; i < ScaleSteps; i++)
+        {
+            double t = i / (double)(ScaleSteps - 1);
+            double biased = Math.Pow(t, 1.8); // ~60% of frames below 1.25x
+            _frameScales[i] = 1.0 + ((peakScale - 1.0) * biased);
+        }
 
         using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Cursors");
 
@@ -90,10 +101,7 @@ public static class CursorHelper
             var frames = new IntPtr[ScaleSteps];
             for (int i = 0; i < ScaleSteps; i++)
             {
-                double t = i / (double)(ScaleSteps - 1);
-                // We cache up to 105% to handle the tiny physical overshoot from the Spring model securely!
-                double scale = 1.0 + ((_cachedMaxScale * 1.05 - 1.0) * t);
-                frames[i] = GenerateFrame(path, fallbackSysHCursor, scale);
+                frames[i] = GenerateFrame(path, fallbackSysHCursor, _frameScales[i]);
             }
 
             _scaleFrames[id] = frames;
@@ -105,17 +113,35 @@ public static class CursorHelper
 
     private static IntPtr GenerateFrame(string? path, IntPtr fallback, double scale)
     {
-        IntPtr frameCursor = IntPtr.Zero;
-        if (!string.IsNullOrEmpty(path))
+        try
         {
-            int ts = (int)(32 * scale);
-            frameCursor = LoadImage(IntPtr.Zero, path, IMAGE_CURSOR, ts, ts, LR_LOADFROMFILE);
+            IntPtr frameCursor = IntPtr.Zero;
+            if (!string.IsNullOrEmpty(path))
+            {
+                int ts = (int)(32 * scale);
+                ts = Math.Max(1, ts); // Ensure non-zero size
+                frameCursor = LoadImage(IntPtr.Zero, path, IMAGE_CURSOR, ts, ts, LR_LOADFROMFILE);
+            }
+
+            if (frameCursor == IntPtr.Zero && fallback != IntPtr.Zero)
+            {
+                try
+                {
+                    frameCursor = MagnifyCursorFallback(fallback, scale);
+                }
+                catch
+                {
+                    // Frame generation failed - return zero
+                    return IntPtr.Zero;
+                }
+            }
+
+            return frameCursor;
         }
-        if (frameCursor == IntPtr.Zero && fallback != IntPtr.Zero)
+        catch
         {
-            frameCursor = MagnifyCursorFallback(fallback, scale);
+            return IntPtr.Zero;
         }
-        return frameCursor;
     }
 
     private static IntPtr MagnifyCursorFallback(IntPtr hCursor, double scale)
@@ -123,13 +149,30 @@ public static class CursorHelper
         IntPtr hSafeCopy = CopyIcon(hCursor);
         if (hSafeCopy == IntPtr.Zero) return IntPtr.Zero;
 
-        using (Icon originalIcon = Icon.FromHandle(hSafeCopy))
-        using (Bitmap originalBmp = originalIcon.ToBitmap())
+        try
         {
-            int newW = (int)(originalBmp.Width * scale);
-            int newH = (int)(originalBmp.Height * scale);
-            if (newW <= 0) newW = 1; if (newH <= 0) newH = 1;
+            // Extract hotspot from the safe copy, not the shared system handle
+            if (!GetIconInfo(hSafeCopy, out ICONINFO origInfo))
+                return IntPtr.Zero;
 
+            int hotX = origInfo.xHotspot;
+            int hotY = origInfo.yHotspot;
+
+            // Get bitmap data then immediately release the GDI objects
+            Bitmap originalBmp;
+            using (Icon tmpIcon = Icon.FromHandle(hSafeCopy))
+                originalBmp = tmpIcon.ToBitmap();
+
+            if (originalBmp == null)
+                return IntPtr.Zero;
+
+            DeleteObject(origInfo.hbmColor);
+            DeleteObject(origInfo.hbmMask);
+
+            int newW = Math.Max(1, (int)(originalBmp.Width * scale));
+            int newH = Math.Max(1, (int)(originalBmp.Height * scale));
+
+            using (originalBmp)
             using (Bitmap newBmp = new Bitmap(newW, newH, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
             {
                 using (Graphics g = Graphics.FromImage(newBmp))
@@ -137,57 +180,144 @@ public static class CursorHelper
                     g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                     g.DrawImage(originalBmp, 0, 0, newW, newH);
                 }
-                
-                IntPtr hIconBig = newBmp.GetHicon();
 
-                if (GetIconInfo(hCursor, out ICONINFO origInfo))
+                IntPtr hIconBig = IntPtr.Zero;
+                try
                 {
-                    if (GetIconInfo(hIconBig, out ICONINFO newInfo))
+                    hIconBig = newBmp.GetHicon();
+                    if (hIconBig == IntPtr.Zero)
+                        return IntPtr.Zero;
+
+                    if (!GetIconInfo(hIconBig, out ICONINFO newInfo))
                     {
-                        newInfo.fIcon = false;
-                        newInfo.xHotspot = (int)(origInfo.xHotspot * scale);
-                        newInfo.yHotspot = (int)(origInfo.yHotspot * scale);
-
-                        IntPtr finalCursor = CreateIconIndirect(ref newInfo);
-
-                        DeleteObject(origInfo.hbmColor); DeleteObject(origInfo.hbmMask);
-                        DeleteObject(newInfo.hbmColor); DeleteObject(newInfo.hbmMask);
                         DestroyIcon(hIconBig);
-
-                        return finalCursor;
+                        return IntPtr.Zero;
                     }
-                    DeleteObject(origInfo.hbmColor); DeleteObject(origInfo.hbmMask);
+
+                    newInfo.fIcon = false;
+                    newInfo.xHotspot = (int)(hotX * scale);
+                    newInfo.yHotspot = (int)(hotY * scale);
+
+                    IntPtr finalCursor = CreateIconIndirect(ref newInfo);
+
+                    DeleteObject(newInfo.hbmColor);
+                    DeleteObject(newInfo.hbmMask);
+                    DestroyIcon(hIconBig);
+
+                    return finalCursor;
                 }
-                return hIconBig;
+                catch
+                {
+                    if (hIconBig != IntPtr.Zero)
+                        DestroyIcon(hIconBig);
+                    return IntPtr.Zero;
+                }
             }
+        }
+        catch
+        {
+            return IntPtr.Zero;
+        }
+        finally
+        {
+            DestroyIcon(hSafeCopy);
         }
     }
 
     public static int GetFrameIndexForScale(double scale)
     {
-        if (_cachedMaxScale <= 1.0) return 0;
-        
-        double peakScale = _cachedMaxScale * 1.05;
-        scale = Math.Clamp(scale, 1.0, peakScale);
-        double t = (scale - 1.0) / (peakScale - 1.0);
-        return Math.Clamp((int)Math.Round(t * (ScaleSteps - 1)), 0, ScaleSteps - 1);
+        if (_frameScales.Length == 0) return 0;
+
+        scale = Math.Clamp(scale, _frameScales[0], _frameScales[^1]);
+
+        int idx = Array.BinarySearch(_frameScales, scale);
+        if (idx >= 0) return idx;
+
+        // BinarySearch returns bitwise complement of next-larger element
+        idx = ~idx;
+        if (idx <= 0) return 0;
+        if (idx >= _frameScales.Length) return _frameScales.Length - 1;
+
+        // Return whichever neighbor is closest
+        return Math.Abs(_frameScales[idx - 1] - scale) <= Math.Abs(_frameScales[idx] - scale)
+            ? idx - 1 : idx;
     }
 
     public static void ApplyScaleFrame(int frameIndex)
     {
-        foreach (uint id in SYSTEM_CURSORS)
+        try
         {
-            if (_scaleFrames.TryGetValue(id, out var frames))
+            // Bounds check
+            if (frameIndex < 0 || frameIndex >= ScaleSteps)
+                frameIndex = 0;
+
+            // Safety: ensure we have cached frames
+            if (_scaleFrames.Count == 0)
+                return;
+
+            List<IntPtr> appliedHandles = new();
+
+            try
             {
-                IntPtr frame = frames[frameIndex];
-                if (frame != IntPtr.Zero)
-                    SetSystemCursor(CopyIcon(frame), id);
+                foreach (uint id in SYSTEM_CURSORS)
+                {
+                    try
+                    {
+                        if (!_scaleFrames.TryGetValue(id, out var frames))
+                            continue;
+
+                        if (frameIndex >= frames.Length)
+                            continue;
+
+                        IntPtr frame = frames[frameIndex];
+
+                        // Skip if no frame for this index
+                        if (frame == IntPtr.Zero)
+                            continue;
+
+                        IntPtr copy = CopyIcon(frame);
+                        if (copy == IntPtr.Zero)
+                            continue;
+
+                        // Try to set the cursor. If successful, Windows takes ownership.
+                        // If it fails, we own the handle and must clean it up.
+                        if (SetSystemCursor(copy, id))
+                        {
+                            appliedHandles.Add(copy); // Track for diagnostics if needed
+                        }
+                        else
+                        {
+                            // SetSystemCursor failed - clean up the copy we made
+                            DestroyIcon(copy);
+                        }
+                    }
+                    catch
+                    {
+                        // Skip this cursor type and continue with others
+                    }
+                }
             }
+            catch
+            {
+                // Complete failure - try to restore to avoid leaving system in bad state
+                RestoreThemeCursors();
+            }
+        }
+        catch
+        {
+            // Outermost safety net
         }
     }
 
     public static void RestoreThemeCursors()
     {
-        SystemParametersInfo(SPI_SETCURSORS, 0, IntPtr.Zero, 0);
+        try
+        {
+            SystemParametersInfo(SPI_SETCURSORS, 0, IntPtr.Zero, 0);
+        }
+        catch
+        {
+            // If restore fails, there's nothing more we can do
+        }
     }
 }

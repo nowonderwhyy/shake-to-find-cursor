@@ -1,0 +1,11 @@
+Application: ShakeToFindCursor.exe
+CoreCLR Version: 10.0.326.7603
+.NET Version: 10.0.3
+Description: The process was terminated due to an unhandled exception.
+Exception Info: System.ArgumentException: Win32 handle that was passed to Icon is not valid or is the wrong type.
+   at System.Drawing.Icon..ctor(HICON handle, Boolean takeOwnership)
+   at System.Drawing.SystemIcons.GetStockIcon(StockIconId stockIcon, Int32 size)
+   at System.Windows.Forms.ThreadExceptionDialog..ctor(Exception t)
+   at System.Windows.Forms.Application.ThreadContext.OnThreadException(Exception ex)
+   at System.Windows.Forms.NativeWindow.Callback(HWND hWnd, UInt32 msg, WPARAM wparam, LPARAM lparam)
+

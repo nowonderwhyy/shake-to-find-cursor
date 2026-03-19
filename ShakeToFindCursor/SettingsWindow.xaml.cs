@@ -64,9 +64,28 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void BtnTest_Click(object sender, RoutedEventArgs e)
+    private async void BtnTest_Click(object sender, RoutedEventArgs e)
     {
-        App.Animator?.Excite(1.0);
+        BtnTest.IsEnabled = false;
+
+        try
+        {
+            // Ensure cache is updated with the current slider value before testing
+            double currentMagnification = SliderMagnification.Value;
+            await System.Threading.Tasks.Task.Run(() =>
+            {
+                CursorHelper.InitCaches(currentMagnification);
+            });
+
+            // Now test with the updated cache using moderate intensity (0.6 = 60%)
+            // This is more representative of actual user shaking than 100%
+            App.Animator?.UpdateSettings(currentMagnification, (int)SliderHold.Value);
+            App.Animator?.Excite(0.6);
+        }
+        finally
+        {
+            BtnTest.IsEnabled = true;
+        }
     }
 
     private void BtnClose_Click(object sender, RoutedEventArgs e)
