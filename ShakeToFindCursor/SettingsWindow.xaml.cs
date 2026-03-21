@@ -6,6 +6,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfRadioButton = System.Windows.Controls.RadioButton;
 
 namespace ShakeToFindCursor;
 
@@ -132,13 +134,13 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void NavCategory_Checked(object sender, RoutedEventArgs e)
     {
-        if (sender is not RadioButton rb) return;
+        if (sender is not WpfRadioButton rb) return;
 
         if (PanelGeneral != null) PanelGeneral.Visibility = Visibility.Collapsed;
         if (PanelAnimation != null) PanelAnimation.Visibility = Visibility.Collapsed;
         if (PanelCompatibility != null) PanelCompatibility.Visibility = Visibility.Collapsed;
 
-        ScrollViewer? targetPanel = rb.Name switch
+        System.Windows.Controls.ScrollViewer? targetPanel = rb.Name switch
         {
             "NavGeneral" => PanelGeneral,
             "NavAnimation" => PanelAnimation,
@@ -177,7 +179,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void BtnReset_Click(object sender, RoutedEventArgs e)
     {
-        var result = MessageBox.Show(
+        var result = WpfMessageBox.Show(
             "Reset all settings to their default values?",
             "Reset Settings",
             MessageBoxButton.YesNo,
@@ -186,7 +188,25 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         if (result == MessageBoxResult.Yes)
         {
             _isLoading = true;
-            App.CurrentSettings = new AppSettings();
+            var defaults = new AppSettings();
+            // Copy all default values to current settings
+            var current = App.CurrentSettings;
+            current.DistanceThreshold = defaults.DistanceThreshold;
+            current.TimeWindowMs = defaults.TimeWindowMs;
+            current.MagnificationFactor = defaults.MagnificationFactor;
+            current.HoldDurationMs = defaults.HoldDurationMs;
+            current.ExpandStiffness = defaults.ExpandStiffness;
+            current.ExpandDamping = defaults.ExpandDamping;
+            current.ShrinkStiffness = defaults.ShrinkStiffness;
+            current.ShrinkDamping = defaults.ShrinkDamping;
+            current.FinalStiffness = defaults.FinalStiffness;
+            current.FinalDamping = defaults.FinalDamping;
+            current.ReleaseBlendMs = defaults.ReleaseBlendMs;
+            current.ReleaseCurvePower = defaults.ReleaseCurvePower;
+            current.AnimationPreset = defaults.AnimationPreset;
+            current.DisableInFullscreen = defaults.DisableInFullscreen;
+            current.RunOnStartup = defaults.RunOnStartup;
+            current.ExcludedProcesses.Clear();
             LoadSettings();
             _isLoading = false;
             MarkDirty();
@@ -306,12 +326,12 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
             }
             else if (_excludedApps.Contains(processName))
             {
-                MessageBox.Show($"{processName} is already excluded.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                WpfMessageBox.Show($"{processName} is already excluded.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not detect foreground app: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBox.Show($"Could not detect foreground app: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -374,7 +394,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
             if (settings.RunOnStartup && !startupSetSuccessfully)
             {
-                MessageBox.Show(
+                WpfMessageBox.Show(
                     "Failed to enable 'Launch at Login'. This may be blocked by antivirus or restricted permissions.",
                     "Permission Error",
                     MessageBoxButton.OK,
@@ -465,7 +485,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         if (_hasUnsavedChanges)
         {
-            var result = MessageBox.Show(
+            var result = WpfMessageBox.Show(
                 "Apply changes before closing?",
                 "Unsaved Changes",
                 MessageBoxButton.YesNoCancel,

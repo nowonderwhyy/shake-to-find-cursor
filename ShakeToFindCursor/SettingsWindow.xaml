@@ -367,7 +367,6 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
-            <Setter Property="TextTransform" Value="Uppercase"/>
         </Style>
         
         <!-- Setting Label Style -->
