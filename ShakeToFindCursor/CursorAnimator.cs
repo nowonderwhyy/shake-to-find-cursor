@@ -224,7 +224,22 @@ public sealed class CursorAnimator : IDisposable
                             done = true;
                     }
 
-                    // Apply visual effect - use overlay or cursor replacement
+                    // ALWAYS scale the cursor (this is the core feature!)
+                    int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
+                    if (frameIndex != _lastAppliedFrame)
+                    {
+                        _lastAppliedFrame = frameIndex;
+                        try
+                        {
+                            CursorHelper.ApplyScaleFrame(frameIndex);
+                        }
+                        catch
+                        {
+                            // Cursor operation failed — continue anyway
+                        }
+                    }
+
+                    // Additionally show overlay effect if enabled (spotlight + ring around scaled cursor)
                     bool useOverlay;
                     lock (_gate)
                     {
@@ -233,7 +248,6 @@ public sealed class CursorAnimator : IDisposable
 
                     if (useOverlay && _overlayWindow != null)
                     {
-                        // Use overlay window (works in all apps)
                         WpfApplication.Current?.Dispatcher?.Invoke(() =>
                         {
                             if (scaleToApply > 1.01)
@@ -248,48 +262,37 @@ public sealed class CursorAnimator : IDisposable
                             }
                         });
                     }
-                    else
-                    {
-                        // Use cursor replacement (legacy mode)
-                        int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
-                        if (frameIndex != _lastAppliedFrame)
-                        {
-                            _lastAppliedFrame = frameIndex;
-                            try
-                            {
-                                CursorHelper.ApplyScaleFrame(frameIndex);
-                            }
-                            catch
-                            {
-                                // Cursor operation failed — just continue, we'll restore on cleanup
-                            }
-                        }
-                    }
 
                     if (done)
                     {
-                        if (!useOverlay)
+                        // Always restore cursor to normal
+                        try
                         {
-                            // Always restore to frame 0 before final restore (legacy mode)
-                            try
-                            {
-                                CursorHelper.ApplyScaleFrame(0);
-                            }
-                            catch
-                            {
-                                // If even this fails, we'll restore below
-                            }
+                            CursorHelper.ApplyScaleFrame(0);
+                        }
+                        catch
+                        {
+                            // If even this fails, we'll restore below
+                        }
 
-                            await Task.Delay(10);
+                        // Also hide overlay if used
+                        if (useOverlay && _overlayWindow != null)
+                        {
+                            WpfApplication.Current?.Dispatcher?.Invoke(() =>
+                            {
+                                _overlayWindow.Hide();
+                            });
+                        }
 
-                            try
-                            {
-                                CursorHelper.RestoreThemeCursors();
-                            }
-                            catch
-                            {
-                                // Final restore attempt failed, but at least we tried
-                            }
+                        await Task.Delay(10);
+
+                        try
+                        {
+                            CursorHelper.RestoreThemeCursors();
+                        }
+                        catch
+                        {
+                            // Final restore attempt failed, but at least we tried
                         }
                         break;
                     }

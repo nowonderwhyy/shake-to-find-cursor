@@ -257,14 +257,108 @@
             </Setter>
         </Style>
         
-        <!-- Modern ComboBox Style -->
+        <!-- Modern ComboBox Style with proper dropdown styling -->
         <Style x:Key="ModernComboBoxStyle" TargetType="ComboBox">
-            <Setter Property="Background" Value="{StaticResource CardBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Background" Value="#3A3A3A"/>
+            <Setter Property="Foreground" Value="#EDEDED"/>
+            <Setter Property="BorderBrush" Value="#505050"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="12,8"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Background" Value="#3A3A3A"/>
+                        <Setter Property="Foreground" Value="#EDEDED"/>
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" 
+                                            Background="{TemplateBinding Background}" 
+                                            Padding="{TemplateBinding Padding}"
+                                            SnapsToDevicePixels="True">
+                                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4EB3FF"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#3D6A99"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="Border" 
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="30"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0"
+                                                      Margin="{TemplateBinding Padding}"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Left"/>
+                                    <Path Grid.Column="1" 
+                                          Data="M0,0 L4,4 L8,0" 
+                                          Fill="#A0A0A0"
+                                          VerticalAlignment="Center" 
+                                          HorizontalAlignment="Center"
+                                          Stroke="#A0A0A0"
+                                          StrokeThickness="1.5"/>
+                                    <ToggleButton Grid.ColumnSpan="2"
+                                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Background="Transparent"
+                                                  BorderThickness="0"
+                                                  Focusable="False"/>
+                                </Grid>
+                            </Border>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Slide">
+                                <Border Background="#3A3A3A"
+                                        BorderBrush="#505050"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Margin="0,2,0,0"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="300">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#4EB3FF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         
         <!-- Card Style -->
@@ -743,12 +837,12 @@
                                          SelectionMode="Single"/>
                                 
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                    <Button x:Name="BtnAddCurrentApp" Content="Add Current App" 
+                                    <Button x:Name="BtnAddCurrentApp" Content="+ Foreground App" 
                                             Style="{StaticResource ModernButtonStyle}"
                                             Click="BtnAddCurrentApp_Click"
                                             Margin="0,0,8,0"/>
-                                    <Button x:Name="BtnAddApp" Content="Add..." 
-                                            Style="{StaticResource ModernButtonStyle}"
+                                    <Button x:Name="BtnAddApp" Content="Browse Apps..." 
+                                            Style="{StaticResource AccentButtonStyle}"
                                             Click="BtnAddApp_Click"
                                             Margin="0,0,8,0"/>
                                     <Button x:Name="BtnRemoveApp" Content="Remove" 
@@ -756,7 +850,7 @@
                                             Click="BtnRemoveApp_Click"/>
                                 </StackPanel>
                                 
-                                <TextBlock Text="Use 'Add Current App' to exclude the currently focused window's application" 
+                                <TextBlock Text="Click 'Browse Apps...' to select from running applications" 
                                            Style="{StaticResource SettingDescriptionStyle}" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>

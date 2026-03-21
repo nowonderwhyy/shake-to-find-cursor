@@ -130,18 +130,33 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void UpdateCustomControlsEnabled()
     {
-        bool isCustom = GetSelectedPreset() == "Custom";
-        
-        SliderMagnification.IsEnabled = isCustom;
-        SliderHoldDuration.IsEnabled = isCustom;
-        ComboExpandSpeed.IsEnabled = isCustom;
-        ComboShrinkSpeed.IsEnabled = isCustom;
-        ComboBounce.IsEnabled = isCustom;
+        // Always enable fine-tuning controls - changing them auto-switches to Custom preset
+        SliderMagnification.IsEnabled = true;
+        SliderHoldDuration.IsEnabled = true;
+        ComboExpandSpeed.IsEnabled = true;
+        ComboShrinkSpeed.IsEnabled = true;
+        ComboBounce.IsEnabled = true;
     }
 
     private string GetSelectedPreset()
     {
         return (ComboPreset.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "macOS Classic";
+    }
+    
+    private void SwitchToCustomPreset()
+    {
+        if (_isLoading) return;
+        // Auto-switch to Custom when user modifies parameters
+        for (int i = 0; i < ComboPreset.Items.Count; i++)
+        {
+            if (ComboPreset.Items[i] is ComboBoxItem item && item.Content?.ToString() == "Custom")
+            {
+                _isLoading = true;  // Prevent recursive calls
+                ComboPreset.SelectedIndex = i;
+                _isLoading = false;
+                break;
+            }
+        }
     }
 
     private void MarkDirty()
@@ -279,27 +294,32 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     private void SliderMagnification_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (LabelMagnification != null) LabelMagnification.Text = $"{e.NewValue:0.0}x";
+        SwitchToCustomPreset();
         MarkDirty();
     }
 
     private void SliderHoldDuration_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (LabelHoldDuration != null) LabelHoldDuration.Text = $"{e.NewValue:0} ms";
+        SwitchToCustomPreset();
         MarkDirty();
     }
 
     private void ComboExpandSpeed_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        SwitchToCustomPreset();
         MarkDirty();
     }
 
     private void ComboShrinkSpeed_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        SwitchToCustomPreset();
         MarkDirty();
     }
 
     private void ComboBounce_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        SwitchToCustomPreset();
         MarkDirty();
     }
 
@@ -420,16 +440,12 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void BtnAddApp_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new InputDialog("Add Application", "Enter the process name (without .exe):");
-        dialog.Owner = this;
-        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.ResponseText))
+        // Show the process picker dialog
+        var picker = new ProcessPickerWindow();
+        picker.Owner = this;
+        if (picker.ShowDialog() == true && !string.IsNullOrWhiteSpace(picker.SelectedProcessName))
         {
-            string processName = dialog.ResponseText.Trim();
-            if (processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                processName = processName[..^4];
-            }
-
+            string processName = picker.SelectedProcessName;
             if (!_excludedApps.Contains(processName))
             {
                 _excludedApps.Add(processName);
