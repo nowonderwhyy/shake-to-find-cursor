@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using WpfApplication = System.Windows.Application;
 
 namespace ShakeToFindCursor;
 
@@ -24,23 +25,19 @@ public sealed class CursorAnimator : IDisposable
     private double _releaseFromScale = 1.0;
     private long _releaseStartTicks;
 
-    // --- Tuning ---
-    // Expand: snappy with a tiny bounce overshoot
-    private const double ExpandStiffness = 700.0;
-    private const double ExpandDamping = 42.0;
+    // --- Configurable Spring Parameters (from settings) ---
+    private double _expandStiffness = 700.0;
+    private double _expandDamping = 42.0;
+    private double _shrinkStiffness = 280.0;
+    private double _shrinkDamping = 38.0;
+    private double _finalStiffness = 160.0;
+    private double _finalDamping = 26.0;
+    private double _releaseBlendMs = 200.0;
+    private double _releaseCurvePower = 2.6;
 
-    // Shrink: moderate pull-back, still responsive
-    private const double ShrinkStiffness = 280.0;
-    private const double ShrinkDamping = 38.0;
-
-    // Final approach (below ~1.25x): critically damped, buttery glide to rest
-    private const double FinalStiffness = 160.0;
-    private const double FinalDamping = 26.0;
-
-    // Release blend: how the target glides toward 1.0
-    // Higher power = more front-loaded deceleration ("car braking")
-    private const double ReleaseBlendMs = 200.0;
-    private const double ReleaseCurvePower = 2.6;
+    // --- Overlay renderer ---
+    private OverlayWindow? _overlayWindow;
+    private bool _useOverlay = true;
 
     private static double Lerp(double a, double b, double t) => a + ((b - a) * t);
 
@@ -50,15 +47,64 @@ public sealed class CursorAnimator : IDisposable
         _holdMs = Math.Clamp(holdDurationMs, 60, 1000);
     }
 
-    public void UpdateSettings(double maxScale, int holdDurationMs)
+    public void UpdateSettings(AppSettings settings)
     {
         lock (_gate)
         {
-            _maxScale = Math.Max(1.0, maxScale);
-            _holdMs = Math.Clamp(holdDurationMs, 60, 1000);
+            _maxScale = Math.Max(1.0, settings.MagnificationFactor);
+            _holdMs = Math.Clamp(settings.HoldDurationMs, 60, 1000);
             _targetScale = Math.Min(_targetScale, _maxScale);
             _currentScale = Math.Min(_currentScale, _maxScale * 1.05);
+
+            // Update spring parameters
+            _expandStiffness = settings.ExpandStiffness;
+            _expandDamping = settings.ExpandDamping;
+            _shrinkStiffness = settings.ShrinkStiffness;
+            _shrinkDamping = settings.ShrinkDamping;
+            _finalStiffness = settings.FinalStiffness;
+            _finalDamping = settings.FinalDamping;
+            _releaseBlendMs = settings.ReleaseBlendMs;
+            _releaseCurvePower = settings.ReleaseCurvePower;
+            _useOverlay = settings.UseOverlayRenderer;
+
+            // Update overlay settings if it exists
+            if (_overlayWindow != null)
+            {
+                WpfApplication.Current?.Dispatcher?.Invoke(() =>
+                {
+                    _overlayWindow.RingOpacity = settings.OverlayRingOpacity;
+                    _overlayWindow.RingThickness = settings.OverlayRingThickness;
+                    _overlayWindow.EnableSpotlight = settings.ShowSpotlight;
+                    try
+                    {
+                        var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(settings.OverlayColor);
+                        _overlayWindow.RingColor = color;
+                    }
+                    catch { }
+                });
+            }
         }
+    }
+
+    public void InitializeOverlay()
+    {
+        WpfApplication.Current?.Dispatcher?.Invoke(() =>
+        {
+            if (_overlayWindow == null)
+            {
+                _overlayWindow = new OverlayWindow();
+                var settings = App.CurrentSettings;
+                _overlayWindow.RingOpacity = settings.OverlayRingOpacity;
+                _overlayWindow.RingThickness = settings.OverlayRingThickness;
+                _overlayWindow.EnableSpotlight = settings.ShowSpotlight;
+                try
+                {
+                    var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(settings.OverlayColor);
+                    _overlayWindow.RingColor = color;
+                }
+                catch { }
+            }
+        });
     }
 
     public void Excite(double intensity)
@@ -126,10 +172,10 @@ public sealed class CursorAnimator : IDisposable
                             double releaseMs =
                                 (Stopwatch.GetTimestamp() - _releaseStartTicks) * 1000.0 / Stopwatch.Frequency;
 
-                            double p = Math.Clamp(releaseMs / ReleaseBlendMs, 0.0, 1.0);
+                            double p = Math.Clamp(releaseMs / _releaseBlendMs, 0.0, 1.0);
 
                             // Power curve: front-loaded decel, long soft tail
-                            double eased = 1.0 - Math.Pow(1.0 - p, ReleaseCurvePower);
+                            double eased = 1.0 - Math.Pow(1.0 - p, _releaseCurvePower);
 
                             _targetScale = Lerp(_releaseFromScale, 1.0, eased);
                         }
@@ -142,20 +188,20 @@ public sealed class CursorAnimator : IDisposable
 
                         if (expanding)
                         {
-                            stiffness = ExpandStiffness;
-                            damping = ExpandDamping;
+                            stiffness = _expandStiffness;
+                            damping = _expandDamping;
                         }
                         else if (_currentScale > 1.25)
                         {
                             // Main shrink: moderate spring
-                            stiffness = ShrinkStiffness;
-                            damping = ShrinkDamping;
+                            stiffness = _shrinkStiffness;
+                            damping = _shrinkDamping;
                         }
                         else
                         {
                             // Final approach: critically damped glide to rest
-                            stiffness = FinalStiffness;
-                            damping = FinalDamping;
+                            stiffness = _finalStiffness;
+                            damping = _finalDamping;
                         }
 
                         double accel = stiffness * (_targetScale - _currentScale) - damping * _velocity;
@@ -178,41 +224,72 @@ public sealed class CursorAnimator : IDisposable
                             done = true;
                     }
 
-                    int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
-                    if (frameIndex != _lastAppliedFrame)
+                    // Apply visual effect - use overlay or cursor replacement
+                    bool useOverlay;
+                    lock (_gate)
                     {
-                        _lastAppliedFrame = frameIndex;
-                        try
+                        useOverlay = _useOverlay;
+                    }
+
+                    if (useOverlay && _overlayWindow != null)
+                    {
+                        // Use overlay window (works in all apps)
+                        WpfApplication.Current?.Dispatcher?.Invoke(() =>
                         {
-                            CursorHelper.ApplyScaleFrame(frameIndex);
-                        }
-                        catch
+                            if (scaleToApply > 1.01)
+                            {
+                                _overlayWindow.UpdateScale(scaleToApply);
+                                if (!_overlayWindow.IsVisible)
+                                    _overlayWindow.Show(scaleToApply);
+                            }
+                            else if (done)
+                            {
+                                _overlayWindow.Hide();
+                            }
+                        });
+                    }
+                    else
+                    {
+                        // Use cursor replacement (legacy mode)
+                        int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
+                        if (frameIndex != _lastAppliedFrame)
                         {
-                            // Cursor operation failed — just continue, we'll restore on cleanup
+                            _lastAppliedFrame = frameIndex;
+                            try
+                            {
+                                CursorHelper.ApplyScaleFrame(frameIndex);
+                            }
+                            catch
+                            {
+                                // Cursor operation failed — just continue, we'll restore on cleanup
+                            }
                         }
                     }
 
                     if (done)
                     {
-                        // Always restore to frame 0 before final restore
-                        try
+                        if (!useOverlay)
                         {
-                            CursorHelper.ApplyScaleFrame(0);
-                        }
-                        catch
-                        {
-                            // If even this fails, we'll restore below
-                        }
+                            // Always restore to frame 0 before final restore (legacy mode)
+                            try
+                            {
+                                CursorHelper.ApplyScaleFrame(0);
+                            }
+                            catch
+                            {
+                                // If even this fails, we'll restore below
+                            }
 
-                        await Task.Delay(10);
+                            await Task.Delay(10);
 
-                        try
-                        {
-                            CursorHelper.RestoreThemeCursors();
-                        }
-                        catch
-                        {
-                            // Final restore attempt failed, but at least we tried
+                            try
+                            {
+                                CursorHelper.RestoreThemeCursors();
+                            }
+                            catch
+                            {
+                                // Final restore attempt failed, but at least we tried
+                            }
                         }
                         break;
                     }
@@ -262,5 +339,12 @@ public sealed class CursorAnimator : IDisposable
         {
             // Best effort — if restore fails, there's not much we can do
         }
+
+        // Close overlay window on UI thread
+        WpfApplication.Current?.Dispatcher?.Invoke(() =>
+        {
+            _overlayWindow?.Close();
+            _overlayWindow = null;
+        });
     }
 }
