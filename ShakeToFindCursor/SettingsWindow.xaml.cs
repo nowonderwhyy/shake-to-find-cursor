@@ -481,6 +481,29 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         storyboard.Begin();
     }
 
+    // Window control handlers
+    private void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        }
+        else
+        {
+            DragMove();
+        }
+    }
+
+    private void BtnMinimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void BtnCloseWindow_Click(object sender, RoutedEventArgs e)
+    {
+        BtnClose_Click(sender, e);
+    }
+
     private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
         if (_hasUnsavedChanges)

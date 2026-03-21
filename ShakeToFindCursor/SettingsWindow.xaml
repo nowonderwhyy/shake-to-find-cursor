@@ -7,6 +7,8 @@
         WindowStartupLocation="CenterScreen"
         Background="#1E1E1E" Foreground="#E5E5E5"
         FontFamily="Segoe UI Variable Display, Segoe UI, Arial"
+        WindowStyle="None"
+        AllowsTransparency="True"
         ResizeMode="CanResizeWithGrip">
     
     <Window.Resources>
@@ -436,15 +438,67 @@
         </Style>
     </Window.Resources>
     
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="180"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Border Background="#1E1E1E" CornerRadius="8" BorderBrush="#2D2D2D" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Custom Title Bar -->
+            <Border Grid.Row="0" Background="#252525" CornerRadius="8,8,0,0" 
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <TextBlock Text="Shake to Find Cursor" 
+                               FontSize="12" 
+                               Foreground="#8E8E93"
+                               VerticalAlignment="Center" 
+                               HorizontalAlignment="Center"/>
+                    
+                    <!-- Window Controls -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,0">
+                        <Button x:Name="BtnMinimize" 
+                                Content="−" 
+                                Width="32" Height="32"
+                                FontSize="16"
+                                Foreground="#8E8E93"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Click="BtnMinimize_Click"
+                                Style="{StaticResource ModernButtonStyle}"/>
+                        <Button x:Name="BtnCloseWindow" 
+                                Content="✕" 
+                                Width="32" Height="32"
+                                FontSize="14"
+                                Foreground="#8E8E93"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Click="BtnCloseWindow_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#E81123"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            
+            <!-- Main Content Area -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
         
         <!-- Sidebar -->
         <Border Grid.Column="0" Grid.RowSpan="2" Background="{StaticResource SidebarBrush}">
@@ -810,5 +864,7 @@
                 </StackPanel>
             </Grid>
         </Border>
-    </Grid>
+            </Grid>
+        </Grid>
+    </Border>
 </Window>
