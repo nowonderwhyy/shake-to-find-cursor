@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using WinForms = System.Windows.Forms;
 
 namespace ShakeToFindCursor;
 
@@ -36,7 +35,6 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         var settings = App.CurrentSettings;
 
         // General
-        ToggleEnabled.IsChecked = true; // App is running, so it's enabled
         ToggleStartup.IsChecked = settings.RunOnStartup;
         SliderThreshold.Value = settings.DistanceThreshold;
         SliderTimeWindow.Value = settings.TimeWindowMs;
@@ -49,13 +47,6 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         SetShrinkSpeedFromSettings(settings);
         SetBounceFromSettings(settings);
 
-        // Appearance
-        ComboRenderer.SelectedIndex = settings.UseOverlayRenderer ? 0 : 1;
-        UpdateColorPreview(settings.OverlayColor);
-        SliderRingOpacity.Value = settings.OverlayRingOpacity;
-        SliderRingThickness.Value = settings.OverlayRingThickness;
-        ToggleSpotlight.IsChecked = settings.ShowSpotlight;
-
         // Compatibility
         ToggleFullscreen.IsChecked = settings.DisableInFullscreen;
         _excludedApps.Clear();
@@ -64,16 +55,14 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
             _excludedApps.Add(app);
         }
 
-        // Update labels
         UpdateAllLabels();
-        UpdateCustomControlsEnabled();
     }
 
     private void SelectPreset(string presetName)
     {
         for (int i = 0; i < ComboPreset.Items.Count; i++)
         {
-            if (ComboPreset.Items[i] is ComboBoxItem item && 
+            if (ComboPreset.Items[i] is ComboBoxItem item &&
                 item.Content?.ToString() == presetName)
             {
                 ComboPreset.SelectedIndex = i;
@@ -109,33 +98,8 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         LabelThreshold.Text = $"{SliderThreshold.Value:0}";
         LabelTimeWindow.Text = $"{SliderTimeWindow.Value:0} ms";
-        LabelMagnification.Text = $"{SliderMagnification.Value:0.0}x";
+        LabelMagnification.Text = $"{SliderMagnification.Value:0.0}×";
         LabelHoldDuration.Text = $"{SliderHoldDuration.Value:0} ms";
-        LabelRingOpacity.Text = $"{SliderRingOpacity.Value:P0}";
-        LabelRingThickness.Text = $"{SliderRingThickness.Value:0.0} px";
-    }
-
-    private void UpdateColorPreview(string colorHex)
-    {
-        try
-        {
-            var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(colorHex);
-            ColorPreview.Background = new SolidColorBrush(color);
-        }
-        catch
-        {
-            ColorPreview.Background = new SolidColorBrush(Colors.Gray);
-        }
-    }
-
-    private void UpdateCustomControlsEnabled()
-    {
-        // Always enable fine-tuning controls - changing them auto-switches to Custom preset
-        SliderMagnification.IsEnabled = true;
-        SliderHoldDuration.IsEnabled = true;
-        ComboExpandSpeed.IsEnabled = true;
-        ComboShrinkSpeed.IsEnabled = true;
-        ComboBounce.IsEnabled = true;
     }
 
     private string GetSelectedPreset()
@@ -146,12 +110,11 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     private void SwitchToCustomPreset()
     {
         if (_isLoading) return;
-        // Auto-switch to Custom when user modifies parameters
         for (int i = 0; i < ComboPreset.Items.Count; i++)
         {
             if (ComboPreset.Items[i] is ComboBoxItem item && item.Content?.ToString() == "Custom")
             {
-                _isLoading = true;  // Prevent recursive calls
+                _isLoading = true;
                 ComboPreset.SelectedIndex = i;
                 _isLoading = false;
                 break;
@@ -169,18 +132,16 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void NavCategory_Checked(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.RadioButton rb) return;
+        if (sender is not RadioButton rb) return;
 
         if (PanelGeneral != null) PanelGeneral.Visibility = Visibility.Collapsed;
         if (PanelAnimation != null) PanelAnimation.Visibility = Visibility.Collapsed;
-        if (PanelAppearance != null) PanelAppearance.Visibility = Visibility.Collapsed;
         if (PanelCompatibility != null) PanelCompatibility.Visibility = Visibility.Collapsed;
 
         ScrollViewer? targetPanel = rb.Name switch
         {
             "NavGeneral" => PanelGeneral,
             "NavAnimation" => PanelAnimation,
-            "NavAppearance" => PanelAppearance,
             "NavCompatibility" => PanelCompatibility,
             _ => PanelGeneral
         };
@@ -189,8 +150,8 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         {
             targetPanel.Visibility = Visibility.Visible;
             targetPanel.Opacity = 0;
-            
-            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150))
+
+            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
@@ -216,8 +177,8 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void BtnReset_Click(object sender, RoutedEventArgs e)
     {
-        var result = System.Windows.MessageBox.Show(
-            "This will reset all settings to their default values. Continue?",
+        var result = MessageBox.Show(
+            "Reset all settings to their default values?",
             "Reset Settings",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -225,40 +186,11 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         if (result == MessageBoxResult.Yes)
         {
             _isLoading = true;
-            var newSettings = new AppSettings();
-            CopySettingsFrom(newSettings);
+            App.CurrentSettings = new AppSettings();
             LoadSettings();
             _isLoading = false;
             MarkDirty();
         }
-    }
-
-    private void CopySettingsFrom(AppSettings source)
-    {
-        var target = App.CurrentSettings;
-        target.DistanceThreshold = source.DistanceThreshold;
-        target.TimeWindowMs = source.TimeWindowMs;
-        target.MagnificationFactor = source.MagnificationFactor;
-        target.HoldDurationMs = source.HoldDurationMs;
-        target.ExpandStiffness = source.ExpandStiffness;
-        target.ExpandDamping = source.ExpandDamping;
-        target.ShrinkStiffness = source.ShrinkStiffness;
-        target.ShrinkDamping = source.ShrinkDamping;
-        target.FinalStiffness = source.FinalStiffness;
-        target.FinalDamping = source.FinalDamping;
-        target.ReleaseBlendMs = source.ReleaseBlendMs;
-        target.ReleaseCurvePower = source.ReleaseCurvePower;
-        target.AnimationPreset = source.AnimationPreset;
-        target.UseOverlayRenderer = source.UseOverlayRenderer;
-        target.OverlayRingOpacity = source.OverlayRingOpacity;
-        target.OverlayColor = source.OverlayColor;
-        target.OverlayRingThickness = source.OverlayRingThickness;
-        target.ShowSpotlight = source.ShowSpotlight;
-        target.DisableInFullscreen = source.DisableInFullscreen;
-        target.RunOnStartup = source.RunOnStartup;
-        target.ExcludedProcesses.Clear();
-        foreach (var p in source.ExcludedProcesses)
-            target.ExcludedProcesses.Add(p);
     }
 
     #endregion
@@ -270,7 +202,6 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         if (_isLoading || ComboPreset.SelectedItem == null) return;
 
         string presetName = GetSelectedPreset();
-        UpdateCustomControlsEnabled();
 
         if (presetName != "Custom")
         {
@@ -281,9 +212,6 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
             SetExpandSpeedFromSettings(preset);
             SetShrinkSpeedFromSettings(preset);
             SetBounceFromSettings(preset);
-            SliderRingOpacity.Value = preset.OverlayRingOpacity;
-            SliderRingThickness.Value = preset.OverlayRingThickness;
-            ToggleSpotlight.IsChecked = preset.ShowSpotlight;
             UpdateAllLabels();
             _isLoading = false;
         }
@@ -293,7 +221,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void SliderMagnification_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (LabelMagnification != null) LabelMagnification.Text = $"{e.NewValue:0.0}x";
+        if (LabelMagnification != null) LabelMagnification.Text = $"{e.NewValue:0.0}×";
         SwitchToCustomPreset();
         MarkDirty();
     }
@@ -329,16 +257,15 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
         try
         {
-            // Build temp settings from current UI values
             var tempSettings = BuildSettingsFromUI();
-            
+
             await System.Threading.Tasks.Task.Run(() =>
             {
                 CursorHelper.InitCaches(tempSettings.MagnificationFactor);
             });
 
             App.Animator?.UpdateSettings(tempSettings);
-            App.Animator?.Excite(0.6);
+            App.Animator?.Excite(0.7);
         }
         finally
         {
@@ -351,57 +278,12 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
         var settings = new AppSettings
         {
             MagnificationFactor = SliderMagnification.Value,
-            HoldDurationMs = (int)SliderHoldDuration.Value,
-            UseOverlayRenderer = ComboRenderer.SelectedIndex == 0,
-            OverlayRingOpacity = SliderRingOpacity.Value,
-            OverlayRingThickness = SliderRingThickness.Value,
-            ShowSpotlight = ToggleSpotlight.IsChecked == true,
-            OverlayColor = (ColorPreview.Background is SolidColorBrush brush) 
-                ? $"#{brush.Color.R:X2}{brush.Color.G:X2}{brush.Color.B:X2}"
-                : "#808080"
+            HoldDurationMs = (int)SliderHoldDuration.Value
         };
         
         ApplySpringSettings(settings);
         
         return settings;
-    }
-
-    #endregion
-
-    #region Appearance Tab Events
-
-    private void ComboRenderer_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        MarkDirty();
-    }
-
-    private void BtnColorPicker_Click(object sender, RoutedEventArgs e)
-    {
-        var colorDialog = new WinForms.ColorDialog
-        {
-            FullOpen = true,
-            Color = System.Drawing.ColorTranslator.FromHtml(App.CurrentSettings.OverlayColor)
-        };
-
-        if (colorDialog.ShowDialog() == WinForms.DialogResult.OK)
-        {
-            var color = colorDialog.Color;
-            string hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-            UpdateColorPreview(hex);
-            MarkDirty();
-        }
-    }
-
-    private void SliderRingOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (LabelRingOpacity != null) LabelRingOpacity.Text = $"{e.NewValue:P0}";
-        MarkDirty();
-    }
-
-    private void SliderRingThickness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (LabelRingThickness != null) LabelRingThickness.Text = $"{e.NewValue:0.0} px";
-        MarkDirty();
     }
 
     #endregion
@@ -412,35 +294,29 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            var (processName, _, windowTitle) = FullscreenDetector.GetForegroundInfo();
-            
-            if (!string.IsNullOrEmpty(processName) && 
+            var (processName, _, _) = FullscreenDetector.GetForegroundInfo();
+
+            if (!string.IsNullOrEmpty(processName) &&
                 !processName.Equals("ShakeToFindCursor", StringComparison.OrdinalIgnoreCase) &&
                 !_excludedApps.Contains(processName))
             {
                 _excludedApps.Add(processName);
                 MarkDirty();
-                
-                ShowSaveIndicator($"Added: {processName}");
-            }
-            else if (processName.Equals("ShakeToFindCursor", StringComparison.OrdinalIgnoreCase))
-            {
-                System.Windows.MessageBox.Show("Cannot exclude this application.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowSaveIndicator($"Added {processName}");
             }
             else if (_excludedApps.Contains(processName))
             {
-                System.Windows.MessageBox.Show($"{processName} is already in the list.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"{processName} is already excluded.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"Could not detect foreground application: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show($"Could not detect foreground app: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void BtnAddApp_Click(object sender, RoutedEventArgs e)
     {
-        // Show the process picker dialog
         var picker = new ProcessPickerWindow();
         picker.Owner = this;
         if (picker.ShowDialog() == true && !string.IsNullOrWhiteSpace(picker.SelectedProcessName))
@@ -486,13 +362,6 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
             settings.HoldDurationMs = (int)SliderHoldDuration.Value;
             ApplySpringSettings(settings);
 
-            // Appearance
-            settings.UseOverlayRenderer = ComboRenderer.SelectedIndex == 0;
-            settings.OverlayColor = GetColorFromPreview();
-            settings.OverlayRingOpacity = SliderRingOpacity.Value;
-            settings.OverlayRingThickness = SliderRingThickness.Value;
-            settings.ShowSpotlight = ToggleSpotlight.IsChecked == true;
-
             // Compatibility
             settings.DisableInFullscreen = ToggleFullscreen.IsChecked == true;
             settings.ExcludedProcesses.Clear();
@@ -505,8 +374,8 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
             if (settings.RunOnStartup && !startupSetSuccessfully)
             {
-                System.Windows.MessageBox.Show(
-                    "Failed to enable 'Run on Startup'. This is usually caused by restricted permissions or antivirus software blocking registry edits.",
+                MessageBox.Show(
+                    "Failed to enable 'Launch at Login'. This may be blocked by antivirus or restricted permissions.",
                     "Permission Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -533,57 +402,51 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void ApplySpringSettings(AppSettings settings)
     {
+        // Expand stiffness based on speed selection
         settings.ExpandStiffness = ComboExpandSpeed.SelectedIndex switch
         {
-            0 => 400.0,
-            1 => 700.0,
-            2 => 1200.0,
-            _ => 700.0
+            0 => 450.0,   // Slow
+            1 => 800.0,   // Medium
+            2 => 1200.0,  // Fast
+            _ => 800.0
         };
 
+        // Shrink stiffness
         settings.ShrinkStiffness = ComboShrinkSpeed.SelectedIndex switch
         {
-            0 => 180.0,
-            1 => 280.0,
-            2 => 500.0,
-            _ => 280.0
+            0 => 200.0,   // Slow
+            1 => 320.0,   // Medium
+            2 => 550.0,   // Fast
+            _ => 320.0
         };
 
+        // Bounce (affects damping - lower = more bounce)
         (settings.ExpandDamping, settings.ShrinkDamping) = ComboBounce.SelectedIndex switch
         {
-            0 => (70.0, 60.0),
-            1 => (50.0, 45.0),
-            2 => (42.0, 38.0),
-            3 => (30.0, 28.0),
-            _ => (42.0, 38.0)
+            0 => (75.0, 65.0),   // None - critically damped
+            1 => (50.0, 45.0),   // Subtle
+            2 => (40.0, 38.0),   // Medium
+            3 => (28.0, 26.0),   // Bouncy
+            _ => (45.0, 40.0)
         };
 
-        settings.FinalStiffness = settings.ShrinkStiffness * 0.5;
+        // Final approach is always smoother
+        settings.FinalStiffness = settings.ShrinkStiffness * 0.55;
         settings.FinalDamping = settings.ShrinkDamping * 0.7;
-    }
-
-    private string GetColorFromPreview()
-    {
-        if (ColorPreview.Background is SolidColorBrush brush)
-        {
-            var color = brush.Color;
-            return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-        }
-        return "#808080";
     }
 
     private void ShowSaveIndicator(string? customMessage = null)
     {
-        SaveIndicator.Text = customMessage ?? "● Settings saved";
-        
-        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
-        var hold = new DoubleAnimation(1, 1, TimeSpan.FromSeconds(2));
-        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(500));
+        SaveIndicator.Text = customMessage ?? "✓ Saved";
+
+        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+        var hold = new DoubleAnimation(1, 1, TimeSpan.FromSeconds(1.5));
+        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(400));
 
         var storyboard = new Storyboard();
         fadeIn.BeginTime = TimeSpan.Zero;
-        hold.BeginTime = TimeSpan.FromMilliseconds(200);
-        fadeOut.BeginTime = TimeSpan.FromMilliseconds(2200);
+        hold.BeginTime = TimeSpan.FromMilliseconds(150);
+        fadeOut.BeginTime = TimeSpan.FromMilliseconds(1650);
 
         Storyboard.SetTarget(fadeIn, SaveIndicator);
         Storyboard.SetTargetProperty(fadeIn, new PropertyPath(OpacityProperty));
@@ -602,8 +465,8 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         if (_hasUnsavedChanges)
         {
-            var result = System.Windows.MessageBox.Show(
-                "You have unsaved changes. Do you want to apply them before closing?",
+            var result = MessageBox.Show(
+                "Apply changes before closing?",
                 "Unsaved Changes",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
@@ -622,87 +485,4 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     }
 
     #endregion
-}
-
-/// <summary>
-/// Simple input dialog for adding process names
-/// </summary>
-public class InputDialog : Window
-{
-    private System.Windows.Controls.TextBox _textBox;
-    public string ResponseText => _textBox.Text;
-
-    public InputDialog(string title, string prompt)
-    {
-        Title = title;
-        Width = 350;
-        Height = 150;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1C1C1C"));
-        ResizeMode = ResizeMode.NoResize;
-
-        var grid = new Grid { Margin = new Thickness(20) };
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var label = new TextBlock
-        {
-            Text = prompt,
-            Foreground = new SolidColorBrush(Colors.White),
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        Grid.SetRow(label, 0);
-
-        _textBox = new System.Windows.Controls.TextBox
-        {
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2A2A")),
-            Foreground = new SolidColorBrush(Colors.White),
-            BorderBrush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#3D3D3D")),
-            Padding = new Thickness(8, 6, 8, 6),
-            Margin = new Thickness(0, 0, 0, 15)
-        };
-        Grid.SetRow(_textBox, 1);
-
-        var buttonPanel = new StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-        };
-
-        var okButton = new System.Windows.Controls.Button
-        {
-            Content = "OK",
-            Width = 80,
-            Padding = new Thickness(0, 6, 0, 6),
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4EB3FF")),
-            Foreground = new SolidColorBrush(Colors.Black),
-            BorderThickness = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        okButton.Click += (s, e) => { DialogResult = true; Close(); };
-
-        var cancelButton = new System.Windows.Controls.Button
-        {
-            Content = "Cancel",
-            Width = 80,
-            Padding = new Thickness(0, 6, 0, 6),
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2A2A")),
-            Foreground = new SolidColorBrush(Colors.White),
-            BorderBrush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#3D3D3D"))
-        };
-        cancelButton.Click += (s, e) => { DialogResult = false; Close(); };
-
-        buttonPanel.Children.Add(okButton);
-        buttonPanel.Children.Add(cancelButton);
-        Grid.SetRow(buttonPanel, 2);
-
-        grid.Children.Add(label);
-        grid.Children.Add(_textBox);
-        grid.Children.Add(buttonPanel);
-
-        Content = grid;
-
-        _textBox.Focus();
-    }
 }

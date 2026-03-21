@@ -41,11 +41,6 @@ public partial class App : System.Windows.Application
         
         Animator = new CursorAnimator(CurrentSettings.MagnificationFactor, CurrentSettings.HoldDurationMs);
         Animator.UpdateSettings(CurrentSettings);
-        
-        // Initialize overlay on UI thread after window is created
-        Dispatcher.BeginInvoke(new Action(() => {
-            Animator.InitializeOverlay();
-        }), System.Windows.Threading.DispatcherPriority.Loaded);
 
         _notifyIcon = new WinForms.NotifyIcon
         {
@@ -109,14 +104,6 @@ public partial class App : System.Windows.Application
 
     private void OnShakeDetected(object? sender, ShakeEventArgs e)
     {
-        // For overlay mode, we don't need to wait for cache
-        if (CurrentSettings.UseOverlayRenderer)
-        {
-            Animator?.Excite(e.Intensity);
-            return;
-        }
-        
-        // For legacy cursor replacement mode
         if (!CursorHelper.IsCached || Animator == null) return;
         Animator.Excite(e.Intensity);
     }
