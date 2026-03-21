@@ -26,14 +26,14 @@ public sealed class CursorAnimator : IDisposable
     private long _releaseStartTicks;
 
     // --- Configurable Spring Parameters (from settings) ---
-    private double _expandStiffness = 700.0;
-    private double _expandDamping = 42.0;
-    private double _shrinkStiffness = 280.0;
-    private double _shrinkDamping = 38.0;
-    private double _finalStiffness = 160.0;
-    private double _finalDamping = 26.0;
-    private double _releaseBlendMs = 200.0;
-    private double _releaseCurvePower = 2.6;
+    private double _expandStiffness = 800.0;
+    private double _expandDamping = 45.0;
+    private double _shrinkStiffness = 320.0;
+    private double _shrinkDamping = 40.0;
+    private double _finalStiffness = 180.0;
+    private double _finalDamping = 28.0;
+    private double _releaseBlendMs = 180.0;
+    private double _releaseCurvePower = 2.8;
 
     // --- Overlay renderer ---
     private OverlayWindow? _overlayWindow;

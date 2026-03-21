@@ -17,16 +17,16 @@ public class AppSettings
     public int HoldDurationMs { get; set; } = 240;
     
     // Animation Spring Parameters
-    public double ExpandStiffness { get; set; } = 700.0;
-    public double ExpandDamping { get; set; } = 42.0;
-    public double ShrinkStiffness { get; set; } = 280.0;
-    public double ShrinkDamping { get; set; } = 38.0;
-    public double FinalStiffness { get; set; } = 160.0;
-    public double FinalDamping { get; set; } = 26.0;
+    public double ExpandStiffness { get; set; } = 800.0;
+    public double ExpandDamping { get; set; } = 45.0;
+    public double ShrinkStiffness { get; set; } = 320.0;
+    public double ShrinkDamping { get; set; } = 40.0;
+    public double FinalStiffness { get; set; } = 180.0;
+    public double FinalDamping { get; set; } = 28.0;
 
     // Animation Timing
-    public double ReleaseBlendMs { get; set; } = 200.0;
-    public double ReleaseCurvePower { get; set; } = 2.6;
+    public double ReleaseBlendMs { get; set; } = 180.0;
+    public double ReleaseCurvePower { get; set; } = 2.8;
 
     // Visual Style
     public string AnimationPreset { get; set; } = "macOS Classic";
@@ -55,19 +55,28 @@ public class AppSettings
         switch (presetName)
         {
             case "macOS Classic":
-                // Default values - faithful to Apple's implementation
+                settings.MagnificationFactor = 6.0;
+                settings.HoldDurationMs = 240;
+                settings.ExpandStiffness = 800.0;
+                settings.ExpandDamping = 45.0;
+                settings.ShrinkStiffness = 320.0;
+                settings.ShrinkDamping = 40.0;
+                settings.FinalStiffness = 180.0;
+                settings.FinalDamping = 28.0;
+                settings.ReleaseBlendMs = 180.0;
+                settings.ReleaseCurvePower = 2.8;
                 break;
                 
             case "Subtle":
                 settings.MagnificationFactor = 3.0;
                 settings.HoldDurationMs = 180;
                 settings.ExpandStiffness = 800.0;
-                settings.ExpandDamping = 50.0;
-                settings.ShrinkStiffness = 350.0;
-                settings.ShrinkDamping = 45.0;
-                settings.FinalStiffness = 200.0;
-                settings.FinalDamping = 32.0;
-                settings.ReleaseBlendMs = 150.0;
+                settings.ExpandDamping = 45.0;
+                settings.ShrinkStiffness = 320.0;
+                settings.ShrinkDamping = 40.0;
+                settings.FinalStiffness = 180.0;
+                settings.FinalDamping = 28.0;
+                settings.ReleaseBlendMs = 180.0;
                 settings.ReleaseCurvePower = 2.2;
                 settings.OverlayRingOpacity = 0.3;
                 settings.OverlayRingThickness = 2.0;
@@ -77,13 +86,13 @@ public class AppSettings
             case "Dramatic":
                 settings.MagnificationFactor = 8.0;
                 settings.HoldDurationMs = 400;
-                settings.ExpandStiffness = 500.0;
-                settings.ExpandDamping = 32.0;
-                settings.ShrinkStiffness = 180.0;
-                settings.ShrinkDamping = 28.0;
-                settings.FinalStiffness = 120.0;
-                settings.FinalDamping = 20.0;
-                settings.ReleaseBlendMs = 300.0;
+                settings.ExpandStiffness = 550.0;
+                settings.ExpandDamping = 35.0;
+                settings.ShrinkStiffness = 200.0;
+                settings.ShrinkDamping = 30.0;
+                settings.FinalStiffness = 130.0;
+                settings.FinalDamping = 22.0;
+                settings.ReleaseBlendMs = 260.0;
                 settings.ReleaseCurvePower = 3.0;
                 settings.OverlayRingOpacity = 0.5;
                 settings.OverlayRingThickness = 4.0;
@@ -94,11 +103,11 @@ public class AppSettings
                 settings.MagnificationFactor = 5.0;
                 settings.HoldDurationMs = 200;
                 settings.ExpandStiffness = 1200.0;
-                settings.ExpandDamping = 70.0;
-                settings.ShrinkStiffness = 500.0;
-                settings.ShrinkDamping = 60.0;
-                settings.FinalStiffness = 300.0;
-                settings.FinalDamping = 45.0;
+                settings.ExpandDamping = 75.0;
+                settings.ShrinkStiffness = 550.0;
+                settings.ShrinkDamping = 65.0;
+                settings.FinalStiffness = 350.0;
+                settings.FinalDamping = 50.0;
                 settings.ReleaseBlendMs = 100.0;
                 settings.ReleaseCurvePower = 2.0;
                 settings.OverlayRingOpacity = 0.4;
@@ -109,13 +118,13 @@ public class AppSettings
             case "Smooth":
                 settings.MagnificationFactor = 5.5;
                 settings.HoldDurationMs = 320;
-                settings.ExpandStiffness = 400.0;
-                settings.ExpandDamping = 35.0;
-                settings.ShrinkStiffness = 180.0;
-                settings.ShrinkDamping = 30.0;
-                settings.FinalStiffness = 100.0;
-                settings.FinalDamping = 18.0;
-                settings.ReleaseBlendMs = 280.0;
+                settings.ExpandStiffness = 450.0;
+                settings.ExpandDamping = 38.0;
+                settings.ShrinkStiffness = 200.0;
+                settings.ShrinkDamping = 32.0;
+                settings.FinalStiffness = 110.0;
+                settings.FinalDamping = 20.0;
+                settings.ReleaseBlendMs = 250.0;
                 settings.ReleaseCurvePower = 3.2;
                 settings.OverlayRingOpacity = 0.35;
                 settings.OverlayRingThickness = 3.5;

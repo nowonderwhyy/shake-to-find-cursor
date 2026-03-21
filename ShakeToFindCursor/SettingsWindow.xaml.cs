@@ -318,7 +318,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
             });
 
             App.Animator?.UpdateSettings(tempSettings);
-            App.Animator?.Excite(0.6);
+            App.Animator?.Excite(0.7);
         }
         finally
         {
@@ -392,7 +392,7 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            var (processName, _, windowTitle) = FullscreenDetector.GetForegroundInfo();
+            var (processName, _, _) = FullscreenDetector.GetForegroundInfo();
             
             if (!string.IsNullOrEmpty(processName) && 
                 !processName.Equals("ShakeToFindCursor", StringComparison.OrdinalIgnoreCase) &&
@@ -420,15 +420,14 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
 
     private void BtnAddApp_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new InputDialog("Add Application", "Enter the process name (without .exe):");
-        dialog.Owner = this;
-        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.ResponseText))
+        var picker = new ProcessPickerWindow
         {
-            string processName = dialog.ResponseText.Trim();
-            if (processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                processName = processName[..^4];
-            }
+            Owner = this
+        };
+
+        if (picker.ShowDialog() == true && !string.IsNullOrWhiteSpace(picker.SelectedProcessName))
+        {
+            string processName = picker.SelectedProcessName;
 
             if (!_excludedApps.Contains(processName))
             {
@@ -519,30 +518,30 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     {
         settings.ExpandStiffness = ComboExpandSpeed.SelectedIndex switch
         {
-            0 => 400.0,
-            1 => 700.0,
+            0 => 450.0,
+            1 => 800.0,
             2 => 1200.0,
-            _ => 700.0
+            _ => 800.0
         };
 
         settings.ShrinkStiffness = ComboShrinkSpeed.SelectedIndex switch
         {
-            0 => 180.0,
-            1 => 280.0,
-            2 => 500.0,
-            _ => 280.0
+            0 => 200.0,
+            1 => 320.0,
+            2 => 550.0,
+            _ => 320.0
         };
 
         (settings.ExpandDamping, settings.ShrinkDamping) = ComboBounce.SelectedIndex switch
         {
-            0 => (70.0, 60.0),
+            0 => (75.0, 65.0),
             1 => (50.0, 45.0),
-            2 => (42.0, 38.0),
-            3 => (30.0, 28.0),
-            _ => (42.0, 38.0)
+            2 => (40.0, 38.0),
+            3 => (28.0, 26.0),
+            _ => (45.0, 40.0)
         };
 
-        settings.FinalStiffness = settings.ShrinkStiffness * 0.5;
+        settings.FinalStiffness = settings.ShrinkStiffness * 0.55;
         settings.FinalDamping = settings.ShrinkDamping * 0.7;
     }
 
@@ -608,85 +607,3 @@ public partial class SettingsWindow : Window, INotifyPropertyChanged
     #endregion
 }
 
-/// <summary>
-/// Simple input dialog for adding process names
-/// </summary>
-public class InputDialog : Window
-{
-    private System.Windows.Controls.TextBox _textBox;
-    public string ResponseText => _textBox.Text;
-
-    public InputDialog(string title, string prompt)
-    {
-        Title = title;
-        Width = 350;
-        Height = 150;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1C1C1C"));
-        ResizeMode = ResizeMode.NoResize;
-
-        var grid = new Grid { Margin = new Thickness(20) };
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var label = new TextBlock
-        {
-            Text = prompt,
-            Foreground = new SolidColorBrush(Colors.White),
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        Grid.SetRow(label, 0);
-
-        _textBox = new System.Windows.Controls.TextBox
-        {
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2A2A")),
-            Foreground = new SolidColorBrush(Colors.White),
-            BorderBrush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#3D3D3D")),
-            Padding = new Thickness(8, 6, 8, 6),
-            Margin = new Thickness(0, 0, 0, 15)
-        };
-        Grid.SetRow(_textBox, 1);
-
-        var buttonPanel = new StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-        };
-
-        var okButton = new System.Windows.Controls.Button
-        {
-            Content = "OK",
-            Width = 80,
-            Padding = new Thickness(0, 6, 0, 6),
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4EB3FF")),
-            Foreground = new SolidColorBrush(Colors.Black),
-            BorderThickness = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        okButton.Click += (s, e) => { DialogResult = true; Close(); };
-
-        var cancelButton = new System.Windows.Controls.Button
-        {
-            Content = "Cancel",
-            Width = 80,
-            Padding = new Thickness(0, 6, 0, 6),
-            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2A2A")),
-            Foreground = new SolidColorBrush(Colors.White),
-            BorderBrush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#3D3D3D"))
-        };
-        cancelButton.Click += (s, e) => { DialogResult = false; Close(); };
-
-        buttonPanel.Children.Add(okButton);
-        buttonPanel.Children.Add(cancelButton);
-        Grid.SetRow(buttonPanel, 2);
-
-        grid.Children.Add(label);
-        grid.Children.Add(_textBox);
-        grid.Children.Add(buttonPanel);
-
-        Content = grid;
-
-        _textBox.Focus();
-    }
-}
