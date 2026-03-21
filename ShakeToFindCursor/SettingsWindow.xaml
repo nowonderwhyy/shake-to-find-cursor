@@ -456,32 +456,69 @@
                                HorizontalAlignment="Center"/>
                     
                     <!-- Window Controls -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button x:Name="BtnMinimize" 
-                                Content="−" 
-                                Width="32" Height="32"
-                                FontSize="16"
-                                Foreground="#8E8E93"
+                                Content="—" 
+                                Width="46" Height="32"
+                                FontSize="18"
+                                FontWeight="Bold"
+                                Foreground="#CCCCCC"
                                 Background="Transparent"
                                 BorderThickness="0"
-                                Click="BtnMinimize_Click"
-                                Style="{StaticResource ModernButtonStyle}"/>
+                                Padding="0,-8,0,0"
+                                Click="BtnMinimize_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0,0,0,0">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#3A3A3A"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#4A4A4A"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                         <Button x:Name="BtnCloseWindow" 
-                                Content="✕" 
-                                Width="32" Height="32"
-                                FontSize="14"
-                                Foreground="#8E8E93"
+                                Content="×" 
+                                Width="46" Height="32"
+                                FontSize="20"
+                                FontWeight="Normal"
+                                Foreground="#CCCCCC"
                                 Background="Transparent"
                                 BorderThickness="0"
                                 Click="BtnCloseWindow_Click">
                             <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#E81123"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                        </Trigger>
-                                    </Style.Triggers>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0,8,0,0">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#E81123"/>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#C81020"/>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
                                 </Style>
                             </Button.Style>
                         </Button>
