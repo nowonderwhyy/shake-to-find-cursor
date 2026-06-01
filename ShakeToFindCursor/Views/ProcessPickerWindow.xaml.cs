@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -14,15 +13,13 @@ using System.Windows.Media.Imaging;
 
 namespace ShakeToFindCursor;
 
-public class ProcessInfo : INotifyPropertyChanged
+public class ProcessInfo
 {
     public string ProcessName { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string WindowTitle { get; set; } = "";
     public int ProcessId { get; set; }
     public ImageSource? Icon { get; set; }
-    
-    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public partial class ProcessPickerWindow : Window

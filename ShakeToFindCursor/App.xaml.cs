@@ -12,35 +12,48 @@ public partial class App : System.Windows.Application
     private WinForms.NotifyIcon? _notifyIcon;
     private bool _isEnabled = true;
     private SettingsWindow? _settingsWindow;
-    
+
+    // Throttle the (expensive) foreground/fullscreen check so it doesn't run on every
+    // mouse-move inside the low-level hook. Touched only on the hook/UI thread.
+    private long _lastFsCheckTicks;
+    private bool _cachedShouldDisable;
+    private const long FsCheckIntervalMs = 300;
+
+    private string _crashDir = "";
+
     public static AppSettings CurrentSettings { get; private set; } = new AppSettings();
     public static CursorAnimator? Animator { get; private set; }
 
     private void Application_Startup(object sender, StartupEventArgs e)
     {
-        // Capture the REAL exception before .NET's dialog tries to load corrupted system icons
-        string crashDir = Path.Combine(
+        _crashDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShakeToFindCursor");
-        Directory.CreateDirectory(crashDir);
+        Directory.CreateDirectory(_crashDir);
 
-        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
-        {
-            File.AppendAllText(Path.Combine(crashDir, "crash.log"), $"{DateTime.Now}\n{args.ExceptionObject}\n\n");
-        };
+        // Route WinForms message-loop exceptions to our handler instead of letting the
+        // ThreadExceptionDialog appear — it can itself crash loading stock icons.
+        WinForms.Application.SetUnhandledExceptionMode(WinForms.UnhandledExceptionMode.CatchException);
+        WinForms.Application.ThreadException += (s, args) => LogAndRestore("ThreadException", args.Exception);
+
+        // Always restore the system cursors on any crash path so the user is never left
+        // with a permanently enlarged cursor.
+        AppDomain.CurrentDomain.UnhandledException += (s, args) => LogAndRestore("AppDomain", args.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (s, args) =>
         {
-            File.AppendAllText(Path.Combine(crashDir, "crash_task.log"), $"{DateTime.Now}\n{args.Exception}\n\n");
+            LogAndRestore("UnobservedTask", args.Exception);
             args.SetObserved();
+        };
+        DispatcherUnhandledException += (s, args) =>
+        {
+            LogAndRestore("Dispatcher", args.Exception);
+            args.Handled = true; // background utility: log + restore, then stay alive
         };
 
         CurrentSettings = AppSettings.Load();
-        
-        Task.Run(() => {
-            CursorHelper.InitCaches(CurrentSettings.MagnificationFactor);
-        });
-        
-        Animator = new CursorAnimator(CurrentSettings.MagnificationFactor, CurrentSettings.HoldDurationMs);
-        Animator.UpdateSettings(CurrentSettings);
+
+        Task.Run(() => CursorHelper.InitCaches(CurrentSettings.MagnificationFactor));
+
+        Animator = new CursorAnimator(CurrentSettings);
 
         _notifyIcon = new WinForms.NotifyIcon
         {
@@ -82,23 +95,63 @@ public partial class App : System.Windows.Application
         contextMenu.Items.Add(exitItem);
         _notifyIcon.ContextMenuStrip = contextMenu;
 
-        MouseHook.Start();
+        if (!MouseHook.Start())
+        {
+            WriteCrashLog("MouseHook", "SetWindowsHookEx failed — shake detection is inactive.");
+            _notifyIcon.Text = "Shake to Find Cursor (hook failed)";
+            _notifyIcon.ShowBalloonTip(5000, "Shake to Find Cursor",
+                "Could not install the mouse hook; shake detection is inactive.",
+                WinForms.ToolTipIcon.Warning);
+        }
         MouseHook.MouseMoved += OnMouseMoved;
         _detector.ShakeDetected += OnShakeDetected;
+
+        // Warm up WPF and the settings window now, while idle, so the first real "open
+        // Settings" doesn't trigger a one-time JIT/allocation burst whose GC pause would
+        // briefly suspend the mouse-hook thread and stutter system-wide input.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            new Action(PrewarmSettingsWindow));
+    }
+
+    private void PrewarmSettingsWindow()
+    {
+        try
+        {
+            var warm = new SettingsWindow
+            {
+                ShowActivated = false,
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                Opacity = 0
+            };
+            warm.Show();
+            // Let one render pass complete (warms the render/JIT path), then discard it.
+            warm.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() => { try { warm.Close(); } catch { } }));
+        }
+        catch { }
     }
 
     private void OnMouseMoved(object? sender, MouseHook.NativePoint point)
     {
         if (!_isEnabled) return;
-        
-        // Check if we should disable (fullscreen app, excluded process, etc.)
-        if (FullscreenDetector.ShouldDisable(
-            CurrentSettings.ExcludedProcesses, 
-            CurrentSettings.DisableInFullscreen))
+
+        // This runs inside the low-level mouse hook for every move, so the expensive
+        // foreground/fullscreen check (which opens a process handle) is throttled to a
+        // few times a second and its result reused in between.
+        long now = Environment.TickCount64;
+        if (now - _lastFsCheckTicks >= FsCheckIntervalMs)
         {
-            return;
+            _lastFsCheckTicks = now;
+            _cachedShouldDisable = FullscreenDetector.ShouldDisable(
+                CurrentSettings.ExcludedProcesses,
+                CurrentSettings.DisableInFullscreen);
         }
-        
+
+        if (_cachedShouldDisable) return;
+
         _detector.AddPoint(point);
     }
 
@@ -123,5 +176,24 @@ public partial class App : System.Windows.Application
     public static void ReloadSettings()
     {
         Animator?.UpdateSettings(CurrentSettings);
+    }
+
+    private void WriteCrashLog(string source, object? info)
+    {
+        try
+        {
+            string path = Path.Combine(_crashDir, "crash.log");
+            // Roll the log if it grows past ~512 KB so it can't accumulate forever.
+            if (File.Exists(path) && new FileInfo(path).Length > 512 * 1024)
+                File.WriteAllText(path, "");
+            File.AppendAllText(path, $"{DateTime.Now} [{source}]\n{info}\n\n");
+        }
+        catch { }
+    }
+
+    private void LogAndRestore(string source, object? info)
+    {
+        WriteCrashLog(source, info);
+        try { CursorHelper.RestoreThemeCursors(); } catch { }
     }
 }

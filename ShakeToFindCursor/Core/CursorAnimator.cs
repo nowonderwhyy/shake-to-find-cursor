@@ -24,23 +24,21 @@ public sealed class CursorAnimator : IDisposable
     private double _releaseFromScale = 1.0;
     private long _releaseStartTicks;
 
-    // --- Configurable Spring Parameters ---
-    // Tuned for that satisfying macOS feel: snappy expand, smooth settle
-    private double _expandStiffness = 800.0;   // Quick pop
-    private double _expandDamping = 45.0;      // Slight overshoot allowed
-    private double _shrinkStiffness = 320.0;   // Smooth retract
-    private double _shrinkDamping = 40.0;
-    private double _finalStiffness = 180.0;    // Buttery final settle
-    private double _finalDamping = 28.0;
-    private double _releaseBlendMs = 180.0;    // Quick release start
-    private double _releaseCurvePower = 2.8;   // Smooth decel curve
+    // --- Spring parameters (canonical defaults live in AppSettings; applied via UpdateSettings) ---
+    private double _expandStiffness;
+    private double _expandDamping;
+    private double _shrinkStiffness;
+    private double _shrinkDamping;
+    private double _finalStiffness;
+    private double _finalDamping;
+    private double _releaseBlendMs;
+    private double _releaseCurvePower;
 
     private static double Lerp(double a, double b, double t) => a + ((b - a) * t);
 
-    public CursorAnimator(double maxScale, int holdDurationMs)
+    public CursorAnimator(AppSettings settings)
     {
-        _maxScale = Math.Max(1.0, maxScale);
-        _holdMs = Math.Clamp(holdDurationMs, 60, 1000);
+        UpdateSettings(settings);
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -180,7 +178,9 @@ public sealed class CursorAnimator : IDisposable
                         break;
                     }
 
-                    // Frame pacing: ~7ms (143 FPS)
+                    // Frame pacing: ~7 ms (≈143 FPS). Deliberate high-precision pacer —
+                    // Thread.Sleep(1) for the bulk of the wait, busy-spin only for the
+                    // sub-2ms tail Sleep can't resolve. Runs only during a brief animation.
                     long targetTicks = Stopwatch.GetTimestamp() + (long)(0.007 * Stopwatch.Frequency);
                     while (Stopwatch.GetTimestamp() < targetTicks)
                     {

@@ -50,19 +50,9 @@ public class AppSettings
         switch (presetName)
         {
             case "macOS Classic":
-                // Tuned for that satisfying Apple feel
-                settings.MagnificationFactor = 5.0;
-                settings.HoldDurationMs = 220;
-                settings.ExpandStiffness = 800.0;
-                settings.ExpandDamping = 45.0;
-                settings.ShrinkStiffness = 320.0;
-                settings.ShrinkDamping = 40.0;
-                settings.FinalStiffness = 180.0;
-                settings.FinalDamping = 28.0;
-                settings.ReleaseBlendMs = 180.0;
-                settings.ReleaseCurvePower = 2.8;
+                // The class defaults already are the macOS Classic tuning.
                 break;
-                
+
             case "Subtle":
                 settings.MagnificationFactor = 3.0;
                 settings.HoldDurationMs = 160;
@@ -125,10 +115,50 @@ public class AppSettings
         {
             try {
                 var json = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-            } catch { }
+                var loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                loaded.Clamp();
+                return loaded;
+            } catch (Exception ex) {
+                LogLoadError(ex);
+            }
         }
         return new AppSettings();
+    }
+
+    /// <summary>
+    /// Clamps deserialized values to the ranges the UI can produce, so a hand-edited or
+    /// corrupt settings file can't push the app into a bad state (e.g. a huge magnification
+    /// factor blowing up the cursor frame cache, or a non-positive spring constant).
+    /// </summary>
+    private void Clamp()
+    {
+        MagnificationFactor = Math.Clamp(MagnificationFactor, 2.0, 10.0);
+        HoldDurationMs = Math.Clamp(HoldDurationMs, 80, 500);
+        TimeWindowMs = Math.Clamp(TimeWindowMs, 100, 1000);
+        DistanceThreshold = Math.Clamp(DistanceThreshold, 500.0, 4000.0);
+
+        ExpandStiffness = Math.Clamp(ExpandStiffness, 50.0, 3000.0);
+        ShrinkStiffness = Math.Clamp(ShrinkStiffness, 50.0, 3000.0);
+        FinalStiffness = Math.Clamp(FinalStiffness, 50.0, 3000.0);
+        ExpandDamping = Math.Clamp(ExpandDamping, 5.0, 200.0);
+        ShrinkDamping = Math.Clamp(ShrinkDamping, 5.0, 200.0);
+        FinalDamping = Math.Clamp(FinalDamping, 5.0, 200.0);
+        ReleaseBlendMs = Math.Clamp(ReleaseBlendMs, 50.0, 1000.0);
+        ReleaseCurvePower = Math.Clamp(ReleaseCurvePower, 1.0, 5.0);
+    }
+
+    private static void LogLoadError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(SettingsPath);
+            if (dir != null)
+            {
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "settings_error.log"), $"{DateTime.Now}\n{ex}\n\n");
+            }
+        }
+        catch { }
     }
 
     public bool Save()

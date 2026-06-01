@@ -70,21 +70,6 @@ public static class FullscreenDetector
 
     #endregion
 
-    // Common game/media process name patterns (lowercase)
-    private static readonly string[] GamePatterns = 
-    {
-        "game", "unity", "unreal", "steam", "epic", "origin", "uplay",
-        "valorant", "fortnite", "minecraft", "roblox", "league", "dota",
-        "csgo", "cs2", "apex", "overwatch", "warzone", "pubg", "gta",
-        "vlc", "mpv", "mpc-", "potplayer", "kmplayer", "plex"
-    };
-
-    // D3D/DirectX module names that indicate game usage
-    private static readonly string[] GraphicsModules =
-    {
-        "d3d9", "d3d10", "d3d11", "d3d12", "dxgi", "nvapi", "amdxc"
-    };
-
     /// <summary>
     /// Returns true if shake-to-find should be disabled based on current foreground window.
     /// </summary>
@@ -135,55 +120,6 @@ public static class FullscreenDetector
         bool isFullscreen = IsFullscreenWindow(hwnd);
 
         return (processName, isFullscreen, windowTitle);
-    }
-
-    /// <summary>
-    /// Checks if a process appears to be a game based on heuristics.
-    /// </summary>
-    public static bool IsLikelyGame(string processName)
-    {
-        if (string.IsNullOrEmpty(processName))
-            return false;
-
-        string lowerName = processName.ToLowerInvariant();
-        
-        // Check name patterns
-        if (GamePatterns.Any(pattern => lowerName.Contains(pattern)))
-            return true;
-
-        // Check for loaded graphics modules (more expensive check)
-        try
-        {
-            var processes = Process.GetProcessesByName(processName);
-            if (processes.Length > 0)
-            {
-                var process = processes[0];
-                try
-                {
-                    foreach (ProcessModule module in process.Modules)
-                    {
-                        string moduleName = module.ModuleName?.ToLowerInvariant() ?? "";
-                        if (GraphicsModules.Any(gfx => moduleName.Contains(gfx)))
-                            return true;
-                    }
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // Access denied - can't enumerate modules
-                }
-                finally
-                {
-                    foreach (var p in processes)
-                        p.Dispose();
-                }
-            }
-        }
-        catch
-        {
-            // Ignore errors in game detection
-        }
-
-        return false;
     }
 
     private static string GetProcessName(IntPtr hwnd)
