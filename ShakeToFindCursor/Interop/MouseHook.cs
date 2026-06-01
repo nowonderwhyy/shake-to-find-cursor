@@ -8,7 +8,19 @@ public static class MouseHook
 {
     private const int WH_MOUSE_LL = 14;
     private const int WM_MOUSEMOVE = 0x0200;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_LBUTTONUP = 0x0202;
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_RBUTTONUP = 0x0205;
+    private const int WM_MBUTTONDOWN = 0x0207;
+    private const int WM_MBUTTONUP = 0x0208;
     private const uint WM_QUIT = 0x0012;
+
+    private const int BtnLeft = 1, BtnRight = 2, BtnMiddle = 4;
+    private static int _buttonMask;
+
+    /// <summary>True while any mouse button is held — used to suppress shake detection during drags.</summary>
+    public static bool IsButtonDown => Volatile.Read(ref _buttonMask) != 0;
 
     private static readonly LowLevelMouseProc _proc = HookCallback;
     private static IntPtr _hookID = IntPtr.Zero;
@@ -91,15 +103,30 @@ public static class MouseHook
 
     private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && wParam == (IntPtr)WM_MOUSEMOVE)
+        if (nCode >= 0)
         {
-            MSLLHOOKSTRUCT? hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-            if (hookStruct.HasValue)
+            switch ((int)wParam)
             {
-                MouseMoved?.Invoke(null, hookStruct.Value.pt);
+                case WM_MOUSEMOVE:
+                    MSLLHOOKSTRUCT? hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    if (hookStruct.HasValue)
+                        MouseMoved?.Invoke(null, hookStruct.Value.pt);
+                    break;
+                case WM_LBUTTONDOWN: SetButton(BtnLeft, true); break;
+                case WM_LBUTTONUP: SetButton(BtnLeft, false); break;
+                case WM_RBUTTONDOWN: SetButton(BtnRight, true); break;
+                case WM_RBUTTONUP: SetButton(BtnRight, false); break;
+                case WM_MBUTTONDOWN: SetButton(BtnMiddle, true); break;
+                case WM_MBUTTONUP: SetButton(BtnMiddle, false); break;
             }
         }
         return CallNextHookEx(_hookID, nCode, wParam, lParam);
+    }
+
+    private static void SetButton(int bit, bool down)
+    {
+        if (down) Interlocked.Or(ref _buttonMask, bit);
+        else Interlocked.And(ref _buttonMask, ~bit);
     }
 
     public struct NativePoint

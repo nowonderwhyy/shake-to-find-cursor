@@ -4,31 +4,31 @@ A high-performance Windows utility that replicates the macOS shake-to-find curso
 
 ## Overview
 
-Shake to Find Cursor is a lightweight, background application for Windows that helps you locate your mouse pointer by rapidly shaking it. When a shake is detected, the cursor momentarily enlarges using a smooth, physics-based animation, making it immediately visible on high-resolution displays or multi-monitor setups.
+Shake to Find Cursor is a lightweight, background application for Windows that helps you locate your mouse pointer by rapidly shaking it. The cursor grows in proportion to how hard you shake and smoothly returns to normal once you stop — the same continuous behavior as macOS — making it immediately visible on high-resolution displays or multi-monitor setups.
 
 ## Core Features
 
 ### Native System Integration
 Unlike typical Windows overlays that can be hidden by the Taskbar, Action Center, or full-screen applications, this utility modifies the native Windows cursor stream via the User32 API. This ensures the enlarged cursor is always rendered at the topmost visual layer, above every other element on your screen.
 
-### Fluid Physics Engine
-The application uses a sophisticated spring-physics model to drive its animations, providing a premium, natural feel:
-- **Snappy Expansion**: The cursor grows quickly with a subtle, realistic bounce.
-- **Natural Landing**: Based on Apple's Fluid Interface principles, the return to normal size follows a multi-phase deceleration curve (similar to a car coming to a stop) with a soft, critically-damped landing approach.
-- **Interruptible Motion**: If you shake the mouse again while the cursor is shrinking, the animation seamlessly redirects back to the enlarged state, preserving its current velocity for continuous, fluid motion.
+### Continuous, macOS-style Motion
+The cursor size is a live readout of how vigorously you are shaking, exactly like macOS:
+- **Grows with the shake**: The harder and longer you shake, the larger the cursor grows, up to your configured maximum.
+- **Smooth, no bounce**: The size eases toward its target every frame with no overshoot or spring wobble.
+- **Shrinks when you stop**: As soon as the shaking stops, the cursor smoothly returns to normal — there is no fixed "hold" timer.
 
 ### Intelligent Shake Detection
-The detection algorithm distinguishes between rapid intentional shakes and normal high-speed mouse movements. It calculates kinetic displacement and net deviation within a precise sliding time window to prevent false triggers.
+The detector distinguishes a deliberate back-and-forth shake from normal fast movement by measuring oscillation (total path length versus net displacement) and counting sharp direction reversals within a sliding time window. Detection is automatically suppressed while a mouse button is held, so dragging and selecting never enlarge the cursor.
 
 ### High-DPI Support
 The engine bypasses standard Windows pixel limits to extract high-resolution cursor assets directly from your active system theme. This ensures the enlarged cursor remains sharp and anti-aliased even at high magnification levels.
 
-### Customizable Settings
-A dedicated settings interface provides full control over the experience:
-- **Size when shaken**: Adjust the maximum magnification level.
-- **Stay enlarged for**: Set the duration the cursor remains at peak size.
-- **Detection Sensitivity**: Fine-tune how easily the shake is triggered.
-- **Run at Startup**: Option to automatically start the utility when you log in to Windows.
+### Simple Settings
+A clean, macOS-minimal settings interface. Changes apply instantly — there is no Apply button:
+- **Sensitivity**: How easily a shake is triggered.
+- **Maximum Size**: How large the cursor grows during a vigorous shake.
+- **Disable in Fullscreen / Excluded Apps**: Automatically pause in games, videos, or specific applications.
+- **Launch at Login**: Automatically start the utility when you log in to Windows.
 
 ## Technical Details
 

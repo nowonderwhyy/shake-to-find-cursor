@@ -5,39 +5,28 @@ using System.Threading.Tasks;
 
 namespace ShakeToFindCursor;
 
+/// <summary>
+/// Drives the system cursor size so it continuously tracks the shake energy. Every
+/// frame the cursor eases toward 1 + (maxScale - 1) * energy with no overshoot and no
+/// hold timer: it grows while you shake and shrinks smoothly the instant you stop —
+/// the macOS "shake to locate" behavior.
+/// </summary>
 public sealed class CursorAnimator : IDisposable
 {
     private readonly object _gate = new();
+    private readonly ShakeDetector _detector;
 
-    private double _currentScale = 1.0;
-    private double _targetScale = 1.0;
-    private double _velocity = 0.0;
     private double _maxScale;
-    private double _holdMs;
-
-    private long _lastExciteTicks = Stopwatch.GetTimestamp();
+    private double _currentScale = 1.0;
     private bool _running;
     private int _lastAppliedFrame = -1;
 
-    // --- Release blend state ---
-    private bool _releasing;
-    private double _releaseFromScale = 1.0;
-    private long _releaseStartTicks;
+    // Time constant for easing the cursor scale toward its energy-driven target.
+    private const double FollowTauMs = 55.0;
 
-    // --- Spring parameters (canonical defaults live in AppSettings; applied via UpdateSettings) ---
-    private double _expandStiffness;
-    private double _expandDamping;
-    private double _shrinkStiffness;
-    private double _shrinkDamping;
-    private double _finalStiffness;
-    private double _finalDamping;
-    private double _releaseBlendMs;
-    private double _releaseCurvePower;
-
-    private static double Lerp(double a, double b, double t) => a + ((b - a) * t);
-
-    public CursorAnimator(AppSettings settings)
+    public CursorAnimator(ShakeDetector detector, AppSettings settings)
     {
+        _detector = detector;
         UpdateSettings(settings);
     }
 
@@ -46,37 +35,14 @@ public sealed class CursorAnimator : IDisposable
         lock (_gate)
         {
             _maxScale = Math.Max(1.0, settings.MagnificationFactor);
-            _holdMs = Math.Clamp(settings.HoldDurationMs, 60, 1000);
-            _targetScale = Math.Min(_targetScale, _maxScale);
-            _currentScale = Math.Min(_currentScale, _maxScale * 1.05);
-
-            // Update spring parameters
-            _expandStiffness = settings.ExpandStiffness;
-            _expandDamping = settings.ExpandDamping;
-            _shrinkStiffness = settings.ShrinkStiffness;
-            _shrinkDamping = settings.ShrinkDamping;
-            _finalStiffness = settings.FinalStiffness;
-            _finalDamping = settings.FinalDamping;
-            _releaseBlendMs = settings.ReleaseBlendMs;
-            _releaseCurvePower = settings.ReleaseCurvePower;
         }
     }
 
-    public void Excite(double intensity)
+    /// <summary>Ensures the animation loop is running. Safe to call on every mouse move.</summary>
+    public void Wake()
     {
-        intensity = Math.Clamp(intensity, 0.0, 1.0);
-
         lock (_gate)
         {
-            double desired = 1.0 + ((_maxScale - 1.0) * intensity);
-
-            // Cancel any in-flight release — we're shaking again
-            _releasing = false;
-
-            // Never yank target downward during active shaking
-            _targetScale = Math.Max(_targetScale, desired);
-            _lastExciteTicks = Stopwatch.GetTimestamp();
-
             if (_running) return;
             _running = true;
             _ = RunAsync();
@@ -88,7 +54,6 @@ public sealed class CursorAnimator : IDisposable
         await Task.Run(async () =>
         {
             long lastTicks = Stopwatch.GetTimestamp();
-            const double StuckAnimationTimeoutMs = 5000;
 
             try
             {
@@ -97,73 +62,24 @@ public sealed class CursorAnimator : IDisposable
                     long nowTicks = Stopwatch.GetTimestamp();
                     double dt = (nowTicks - lastTicks) / (double)Stopwatch.Frequency;
                     lastTicks = nowTicks;
-
-                    if (dt <= 0) dt = 1.0 / 120.0;
+                    if (dt <= 0) dt = 1.0 / 144.0;
                     if (dt > 0.05) dt = 0.05;
 
-                    bool done;
-                    double scaleToApply;
-                    double msSinceLastInput;
+                    double energy = _detector.Tick(Environment.TickCount64);
 
-                    lock (_gate)
-                    {
-                        msSinceLastInput = (Stopwatch.GetTimestamp() - _lastExciteTicks) * 1000.0 / Stopwatch.Frequency;
+                    double max;
+                    lock (_gate) { max = _maxScale; }
 
-                        // Begin release blend when hold expires
-                        if (!_releasing && msSinceLastInput > _holdMs)
-                        {
-                            _releasing = true;
-                            _releaseFromScale = Math.Max(_currentScale, 1.0);
-                            _releaseStartTicks = Stopwatch.GetTimestamp();
-                        }
+                    double target = 1.0 + ((max - 1.0) * energy);
+                    double alpha = 1.0 - Math.Exp(-dt / (FollowTauMs / 1000.0));
 
-                        // Glide the target toward 1.0 on a deceleration curve
-                        if (_releasing)
-                        {
-                            double releaseMs = (Stopwatch.GetTimestamp() - _releaseStartTicks) * 1000.0 / Stopwatch.Frequency;
-                            double p = Math.Clamp(releaseMs / _releaseBlendMs, 0.0, 1.0);
-                            double eased = 1.0 - Math.Pow(1.0 - p, _releaseCurvePower);
-                            _targetScale = Lerp(_releaseFromScale, 1.0, eased);
-                        }
+                    _currentScale += (target - _currentScale) * alpha;
+                    if (_currentScale < 1.0) _currentScale = 1.0;
 
-                        // Pick the right spring parameters for current phase
-                        bool expanding = _targetScale > _currentScale;
-                        double stiffness, damping;
+                    double scale = _currentScale;
+                    bool done = energy <= 0.0 && Math.Abs(_currentScale - 1.0) < 0.01;
 
-                        if (expanding)
-                        {
-                            stiffness = _expandStiffness;
-                            damping = _expandDamping;
-                        }
-                        else if (_currentScale > 1.25)
-                        {
-                            stiffness = _shrinkStiffness;
-                            damping = _shrinkDamping;
-                        }
-                        else
-                        {
-                            // Final approach: critically damped glide to rest
-                            stiffness = _finalStiffness;
-                            damping = _finalDamping;
-                        }
-
-                        double accel = stiffness * (_targetScale - _currentScale) - damping * _velocity;
-                        _velocity += accel * dt;
-                        _currentScale += _velocity * dt;
-
-                        _currentScale = Math.Clamp(_currentScale, 1.0, _maxScale * 1.05);
-                        scaleToApply = _currentScale;
-
-                        done = Math.Abs(_targetScale - _currentScale) < 0.005 &&
-                               Math.Abs(_velocity) < 0.005 &&
-                               _targetScale <= 1.001;
-
-                        if (_releasing && msSinceLastInput > StuckAnimationTimeoutMs)
-                            done = true;
-                    }
-
-                    // Apply cursor scale
-                    int frameIndex = CursorHelper.GetFrameIndexForScale(scaleToApply);
+                    int frameIndex = CursorHelper.GetFrameIndexForScale(scale);
                     if (frameIndex != _lastAppliedFrame)
                     {
                         _lastAppliedFrame = frameIndex;
@@ -180,7 +96,7 @@ public sealed class CursorAnimator : IDisposable
 
                     // Frame pacing: ~7 ms (≈143 FPS). Deliberate high-precision pacer —
                     // Thread.Sleep(1) for the bulk of the wait, busy-spin only for the
-                    // sub-2ms tail Sleep can't resolve. Runs only during a brief animation.
+                    // sub-2ms tail Sleep can't resolve. Runs only during an active shake.
                     long targetTicks = Stopwatch.GetTimestamp() + (long)(0.007 * Stopwatch.Frequency);
                     while (Stopwatch.GetTimestamp() < targetTicks)
                     {
@@ -196,9 +112,6 @@ public sealed class CursorAnimator : IDisposable
                 lock (_gate)
                 {
                     _running = false;
-                    _releasing = false;
-                    _velocity = 0.0;
-                    _targetScale = 1.0;
                     _currentScale = 1.0;
                     _lastAppliedFrame = -1;
                 }

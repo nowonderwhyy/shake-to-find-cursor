@@ -8,7 +8,6 @@ namespace ShakeToFindCursor;
 
 public partial class App : System.Windows.Application
 {
-    private ShakeDetector _detector = new ShakeDetector();
     private WinForms.NotifyIcon? _notifyIcon;
     private bool _isEnabled = true;
     private SettingsWindow? _settingsWindow;
@@ -22,6 +21,7 @@ public partial class App : System.Windows.Application
     private string _crashDir = "";
 
     public static AppSettings CurrentSettings { get; private set; } = new AppSettings();
+    public static ShakeDetector? Detector { get; private set; }
     public static CursorAnimator? Animator { get; private set; }
 
     private void Application_Startup(object sender, StartupEventArgs e)
@@ -53,7 +53,8 @@ public partial class App : System.Windows.Application
 
         Task.Run(() => CursorHelper.InitCaches(CurrentSettings.MagnificationFactor));
 
-        Animator = new CursorAnimator(CurrentSettings);
+        Detector = new ShakeDetector(CurrentSettings);
+        Animator = new CursorAnimator(Detector, CurrentSettings);
 
         _notifyIcon = new WinForms.NotifyIcon
         {
@@ -104,7 +105,6 @@ public partial class App : System.Windows.Application
                 WinForms.ToolTipIcon.Warning);
         }
         MouseHook.MouseMoved += OnMouseMoved;
-        _detector.ShakeDetected += OnShakeDetected;
 
         // Warm up WPF and the settings window now, while idle, so the first real "open
         // Settings" doesn't trigger a one-time JIT/allocation burst whose GC pause would
@@ -136,7 +136,7 @@ public partial class App : System.Windows.Application
 
     private void OnMouseMoved(object? sender, MouseHook.NativePoint point)
     {
-        if (!_isEnabled) return;
+        if (!_isEnabled || Detector == null) return;
 
         // This runs inside the low-level mouse hook for every move, so the expensive
         // foreground/fullscreen check (which opens a process handle) is throttled to a
@@ -150,15 +150,13 @@ public partial class App : System.Windows.Application
                 CurrentSettings.DisableInFullscreen);
         }
 
-        if (_cachedShouldDisable) return;
+        // Don't grow the cursor while dragging/selecting (a button is held), or while an
+        // excluded/fullscreen app is in front.
+        Detector.SetSuppressed(_cachedShouldDisable || MouseHook.IsButtonDown);
 
-        _detector.AddPoint(point);
-    }
-
-    private void OnShakeDetected(object? sender, ShakeEventArgs e)
-    {
-        if (!CursorHelper.IsCached || Animator == null) return;
-        Animator.Excite(e.Intensity);
+        Detector.AddSample(point, now);
+        if (Detector.Energy > 0 && CursorHelper.IsCached)
+            Animator?.Wake();
     }
 
     private void Application_Exit(object sender, ExitEventArgs e)
@@ -175,6 +173,7 @@ public partial class App : System.Windows.Application
     
     public static void ReloadSettings()
     {
+        Detector?.UpdateSettings(CurrentSettings);
         Animator?.UpdateSettings(CurrentSettings);
     }
 
